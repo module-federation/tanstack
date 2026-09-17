@@ -1,0 +1,46 @@
+name: Release Pull Request
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-pull-request
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate release request
+        env:
+          REPO_SCOPED_TOKEN: ${{ secrets.REPO_SCOPED_TOKEN }}
+        run: |
+          test "$GITHUB_REF" = "refs/heads/main" || { echo "Release PRs are main-only."; exit 1; }
+          test -n "$REPO_SCOPED_TOKEN" || { echo "REPO_SCOPED_TOKEN is required."; exit 1; }
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 10
+          token: ${{ secrets.REPO_SCOPED_TOKEN }}
+      - uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # v6
+        with:
+          version: 10.15.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: module-federation/actions@842df3a7740093a5ff44de2b9a890106046b8e32 # v2
+        with:
+          version: latest
+          versionNumber: auto
+          type: pull request
+          tools: changeset
+          coreNpmName: "@module-federation/tanstack"
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_SCOPED_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}

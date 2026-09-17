@@ -1,0 +1,26 @@
+{
+  "name": "mf-tanstack",
+  "private": true,
+  "packageManager": "pnpm@10.15.0",
+  "engines": {
+    "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "build:package": "pnpm --filter @module-federation/tanstack build",
+    "dev": "turbo run dev",
+    "test": "pnpm build:package && node --test --test-concurrency=1 test/*.test.mjs",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "pack:tanstack": "pnpm --filter @module-federation/tanstack pack:dry",
+    "changeset": "changeset",
+    "changeset:status": "changeset status"
+  },
+  "devDependencies": {
+    "@changesets/cli": "3.0.3",
+    "prettier": "3.9.7",
+    "turbo": "2.10.13",
+    "typescript": "6.0.3"
+  }
+}
