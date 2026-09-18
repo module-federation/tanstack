@@ -93,8 +93,8 @@ TanStack Start's standard `dist/server/index.js` entry.
 
 ## Example
 
-The workspace includes Vite and Rsbuild pairs. `apps/remote` exposes a
-stateful React card to `apps/host`. `apps/rsbuild-remote` exposes a second card
+The workspace includes Vite and Rsbuild pairs. `apps/vite-remote` exposes a
+stateful React card to `apps/vite-host`. `apps/rsbuild-remote` exposes a second card
 to the Vite host, while `apps/rsbuild-host` consumes the Vite remote. Both
 cross-bundler links use manifest URLs. They render after hydration, so this is
 browser interop coverage, not an unverified SSR interoperability claim.

@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const hostDist = join(root, "apps", "host", "dist");
-const remoteDist = join(root, "apps", "remote", "dist");
+const viteHostDist = join(root, "apps", "vite-host", "dist");
+const viteRemoteDist = join(root, "apps", "vite-remote", "dist");
 const rsbuildHostDist = join(root, "apps", "rsbuild-host", "dist");
 const rsbuildRemoteDist = join(root, "apps", "rsbuild-remote", "dist");
 
@@ -16,8 +16,8 @@ function readJson(path) {
 
 test("all TanStack Start apps produce client and server builds", () => {
   for (const [name, dist] of [
-    ["host", hostDist],
-    ["remote", remoteDist],
+    ["Vite host", viteHostDist],
+    ["Vite remote", viteRemoteDist],
     ["rsbuild host", rsbuildHostDist],
     ["rsbuild remote", rsbuildRemoteDist],
   ]) {
@@ -28,12 +28,12 @@ test("all TanStack Start apps produce client and server builds", () => {
 });
 
 test("remote publishes browser and server federation entries", () => {
-  const client = join(remoteDist, "client");
+  const client = join(viteRemoteDist, "client");
   assert.ok(existsSync(join(client, "remoteEntry.js")));
   assert.ok(existsSync(join(client, "remoteEntry.ssr.js")));
 
   const manifest = readJson(join(client, "mf-manifest.json"));
-  assert.equal(manifest.name, "tanstack_remote");
+  assert.equal(manifest.name, "tanstack_vite_remote");
   assert.equal(manifest.metaData.remoteEntry.name, "remoteEntry.js");
   assert.equal(manifest.metaData.ssrRemoteEntry.name, "remoteEntry.ssr.js");
 
@@ -47,18 +47,18 @@ test("remote publishes browser and server federation entries", () => {
   }
 });
 
-test("host records the TanStack remote and server-side loader", () => {
-  const manifest = readJson(join(hostDist, "client", "mf-manifest.json"));
-  const remote = manifest.remotes.find(({ alias }) => alias === "tanstack_remote");
+test("Vite host records the TanStack remote and server-side loader", () => {
+  const manifest = readJson(join(viteHostDist, "client", "mf-manifest.json"));
+  const remote = manifest.remotes.find(({ alias }) => alias === "tanstack_vite_remote");
   assert.equal(remote?.moduleName, "StatusCard");
 
-  const serverFiles = readFileSync(join(hostDist, "server", ".vite", "manifest.json"), "utf8");
+  const serverFiles = readFileSync(join(viteHostDist, "server", ".vite", "manifest.json"), "utf8");
   assert.match(serverFiles, /ssrEntryLoader/);
-  assert.match(serverFiles, /tanstack_remote/);
+  assert.match(serverFiles, /tanstack_vite_remote/);
 });
 
 test("Vite and Rsbuild publish reciprocal client interoperability contracts", () => {
-  const viteHostManifest = readJson(join(hostDist, "client", "mf-manifest.json"));
+  const viteHostManifest = readJson(join(viteHostDist, "client", "mf-manifest.json"));
   const rsbuildHostManifest = readJson(join(rsbuildHostDist, "client", "mf-manifest.json"));
   const rsbuildRemoteClient = readJson(join(rsbuildRemoteDist, "client", "mf-manifest.json"));
 
@@ -67,7 +67,7 @@ test("Vite and Rsbuild publish reciprocal client interoperability contracts", ()
     "StatusCard",
   );
   assert.equal(
-    rsbuildHostManifest.remotes.find(({ alias }) => alias === "tanstack_remote")?.entry,
+    rsbuildHostManifest.remotes.find(({ alias }) => alias === "tanstack_vite_remote")?.entry,
     "http://127.0.0.1:3001/mf-manifest.json",
   );
   assert.equal(

@@ -71,8 +71,8 @@ async function stopApp(child) {
   }
 }
 
-test("host server-renders a component from the TanStack remote", async () => {
-  const remote = startApp("tanstack-start-remote");
+test("Vite host server-renders a component from the Vite remote", async () => {
+  const remote = startApp("tanstack-start-vite-remote");
   let host;
 
   try {
@@ -83,7 +83,7 @@ test("host server-renders a component from the TanStack remote", async () => {
     );
     assert.match(remoteEntry.body, /virtual:mf-exposes/);
 
-    host = startApp("tanstack-start-host");
+    host = startApp("tanstack-start-vite-host");
     const response = await waitForResponse(
       "http://127.0.0.1:3000/",
       host,
@@ -99,7 +99,7 @@ test("host server-renders a component from the TanStack remote", async () => {
 });
 
 test("Vite and Rsbuild hosts serve reciprocal browser-interoperability shells", async () => {
-  const viteRemote = startApp("tanstack-start-remote");
+  const viteRemote = startApp("tanstack-start-vite-remote");
   const rsbuildRemote = startApp("tanstack-start-rsbuild-remote");
   let viteHost;
   let rsbuildHost;
@@ -117,7 +117,7 @@ test("Vite and Rsbuild hosts serve reciprocal browser-interoperability shells", 
     );
     assert.match(manifest.body, /tanstack_rsbuild_remote/);
 
-    viteHost = startApp("tanstack-start-host");
+    viteHost = startApp("tanstack-start-vite-host");
     rsbuildHost = startApp("tanstack-start-rsbuild-host");
 
     const viteResponse = await waitForResponse(

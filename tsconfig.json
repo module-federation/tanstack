@@ -3,8 +3,8 @@
   "files": [],
   "references": [
     { "path": "./packages/tanstack/tsconfig.json" },
-    { "path": "./apps/host/tsconfig.json" },
-    { "path": "./apps/remote/tsconfig.json" },
+    { "path": "./apps/vite-host/tsconfig.json" },
+    { "path": "./apps/vite-remote/tsconfig.json" },
     { "path": "./apps/rsbuild-host/tsconfig.json" },
     { "path": "./apps/rsbuild-remote/tsconfig.json" }
   ]

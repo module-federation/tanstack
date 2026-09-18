@@ -14,7 +14,10 @@ function Home() {
           fallback="Loading the Rsbuild remote…"
           remote="tanstack_rsbuild_remote/StatusCard"
         />
-        <RemoteCardSlot fallback="Loading the Vite remote…" remote="tanstack_remote/StatusCard" />
+        <RemoteCardSlot
+          fallback="Loading the Vite remote…"
+          remote="tanstack_vite_remote/StatusCard"
+        />
       </div>
     </main>
   );

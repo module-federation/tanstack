@@ -2,9 +2,10 @@
 
 Both sides of this example are TanStack Start applications.
 
-- `remote` exposes `./StatusCard` from its Module Federation container and also
+- `vite-remote` exposes `./StatusCard` from its Module Federation container and also
   renders the component on its own `/` route.
-- `host` loads `tanstack_remote/StatusCard` from the remote running on port 3001. Its own application runs on port 3000.
+- `vite-host` loads `tanstack_vite_remote/StatusCard` from the remote running on
+  port 3001. Its own application runs on port 3000.
 
 From the repository root:
 

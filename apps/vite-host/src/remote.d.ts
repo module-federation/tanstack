@@ -1,4 +1,4 @@
-declare module "tanstack_remote/StatusCard" {
+declare module "tanstack_vite_remote/StatusCard" {
   import type { ComponentType } from "react";
 
   const StatusCard: ComponentType;

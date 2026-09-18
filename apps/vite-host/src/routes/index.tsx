@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useState } from "react";
 
-const RemoteStatusCard = lazy(() => import("tanstack_remote/StatusCard"));
+const RemoteStatusCard = lazy(() => import("tanstack_vite_remote/StatusCard"));
 const RsbuildStatusCard = lazy(() => import("tanstack_rsbuild_remote/StatusCard"));
 
 export const Route = createFileRoute("/")({
-  loader: () => import("tanstack_remote/StatusCard").then(() => null),
+  loader: () => import("tanstack_vite_remote/StatusCard").then(() => null),
   component: Home,
 });
 
@@ -16,8 +16,8 @@ function Home() {
         <p className="eyebrow">TanStack Start × Module Federation</p>
         <h1>Two full-stack apps. One React tree.</h1>
         <p className="lede">
-          This page belongs to the host on port 3000. The interactive card below is owned and built
-          by a second TanStack Start application on port 3001.
+          This page belongs to the Vite host on port 3000. The interactive card below is owned and
+          built by a second TanStack Start application on port 3001.
         </p>
       </header>
 

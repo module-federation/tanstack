@@ -42,7 +42,7 @@ a different dist-tag. Configure npm trusted publishing for repository
 `module-federation/tanstack`, workflow `release.yml`, environment `Publish`.
 
 The release gate builds the Vite and Rsbuild example pairs. It checks the Vite
-host server bundle and both directions of client manifest interoperability. The
+Vite host server bundle and both directions of client manifest interoperability. The
 Rsbuild example remote is browser-only; package tests cover the adapter's
 async-node CommonJS SSR configuration. Browser-level coverage for hydrated
 cross-bundler rendering remains follow-up work.

@@ -1,5 +1,5 @@
 {
-  "name": "tanstack-start-host",
+  "name": "tanstack-start-vite-host",
   "private": true,
   "sideEffects": false,
   "type": "module",

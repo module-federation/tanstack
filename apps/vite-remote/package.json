@@ -1,5 +1,5 @@
 {
-  "name": "tanstack-start-remote",
+  "name": "tanstack-start-vite-remote",
   "private": true,
   "sideEffects": false,
   "type": "module",

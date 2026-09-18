@@ -6,23 +6,26 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [
     tanstackStartModuleFederation({
-      name: "tanstack_remote",
+      name: "tanstack_vite_host",
       dts: false,
-      exposes: {
-        "./StatusCard": "./src/components/StatusCard.tsx",
+      remotes: {
+        tanstack_vite_remote: {
+          type: "module",
+          name: "tanstack_vite_remote",
+          entry: "http://127.0.0.1:3001/remoteEntry.js",
+        },
+        tanstack_rsbuild_remote: {
+          type: "global",
+          name: "tanstack_rsbuild_remote",
+          entry: "http://127.0.0.1:3002/mf-manifest.json",
+        },
       },
     }),
     tanstackStart(),
     react(),
   ],
   server: {
-    port: 3001,
-    cors: true,
-    origin: "http://127.0.0.1:3001",
-  },
-  preview: {
-    port: 3001,
-    cors: true,
+    port: 3000,
   },
   ssr: {
     optimizeDeps: {
