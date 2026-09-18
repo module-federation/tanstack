@@ -21,4 +21,4 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:package
-      - run: pnpm dlx pkg-pr-new@0.0.54 publish --compact ./packages/tanstack
+      - run: pnpm dlx pkg-pr-new@0.0.54 publish ./packages/tanstack

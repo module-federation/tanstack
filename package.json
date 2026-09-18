@@ -8,12 +8,13 @@
   "scripts": {
     "build": "turbo run build",
     "build:package": "pnpm --filter @module-federation/tanstack build",
-    "dev": "turbo run dev",
-    "test": "pnpm build:package && node --test --test-concurrency=1 test/*.test.mjs",
+    "dev": "pnpm build:package && turbo run dev",
+    "test": "pnpm build && node --test --test-concurrency=1 test/*.test.mjs",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "pack:tanstack": "pnpm --filter @module-federation/tanstack pack:dry",
+    "start": "pnpm build:package && turbo run start",
     "changeset": "changeset",
     "changeset:status": "changeset status"
   },

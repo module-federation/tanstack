@@ -1,0 +1,59 @@
+:root {
+  color: #e9efe9;
+  background: #101411;
+  font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: radial-gradient(circle at 75% 12%, rgba(231, 155, 76, 0.2), transparent 32%), #101411;
+}
+
+button {
+  font: inherit;
+}
+
+.remote-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  align-items: center;
+  gap: 70px;
+  width: min(1050px, calc(100% - 40px));
+  min-height: 100vh;
+  margin: 0 auto;
+}
+
+.eyebrow {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  color: #f4a95f;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 18px 0 20px;
+  font-size: clamp(3rem, 6vw, 5.8rem);
+  line-height: 0.96;
+  letter-spacing: -0.06em;
+}
+
+.lede {
+  color: #aeb9b1;
+  line-height: 1.65;
+}
+
+@media (max-width: 780px) {
+  .remote-page {
+    grid-template-columns: 1fr;
+    gap: 40px;
+    padding: 56px 0;
+  }
+}

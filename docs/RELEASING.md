@@ -41,6 +41,6 @@ The publish workflow reruns the gate, checks that the source is reachable from
 a different dist-tag. Configure npm trusted publishing for repository
 `module-federation/tanstack`, workflow `release.yml`, environment `Publish`.
 
-There are no committed app fixtures yet. The next integration matrix should
-cover TanStack Start client and SSR builds on Vite 7 and 8, host/remote module
-entries, manifest output, React singleton identity, and Nitro externalization.
+The release gate builds both TanStack Start examples and checks the host server
+bundle plus the remote federation manifest and entries. Browser-level coverage
+for SSR markup, hydration, and remote failure recovery remains follow-up work.

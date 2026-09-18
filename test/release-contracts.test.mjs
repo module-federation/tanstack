@@ -11,6 +11,7 @@ const packageRequire = createRequire(join(packageRoot, "package.json"));
 const packageJson = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
 const rootPackageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 const ciWorkflow = readFileSync(join(root, ".github", "workflows", "ci.yml"), "utf8");
+const previewWorkflow = readFileSync(join(root, ".github", "workflows", "pkg-pr-new.yml"), "utf8");
 const releaseWorkflow = readFileSync(join(root, ".github", "workflows", "release.yml"), "utf8");
 const { tanstackStartModuleFederation } = await import(join(packageRoot, "dist", "index.mjs"));
 
@@ -113,4 +114,9 @@ test("GitHub prereleases publish the version validated against their tag", () =>
 test("npm publications share one package-wide concurrency queue", () => {
   assert.match(releaseWorkflow, /group: publish-module-federation-tanstack/);
   assert.doesNotMatch(releaseWorkflow, /group:.*github\.(?:ref|run)/);
+});
+
+test("first package preview does not require an existing npm release", () => {
+  assert.match(previewWorkflow, /pkg-pr-new@0\.0\.54 publish \.\/packages\/tanstack/);
+  assert.doesNotMatch(previewWorkflow, /--compact/);
 });

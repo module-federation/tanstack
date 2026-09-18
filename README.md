@@ -50,3 +50,16 @@ selection to `@module-federation/vite` for each environment.
 The package supports Node 22.18+, 24.11+, and 26+, plus Vite 7/8 and TanStack
 Start 1.x. Use Vite 8 when developing SSR hosts that load remotes; Vite 7
 remains supported for production builds.
+
+## Example
+
+The workspace includes two TanStack Start apps. `apps/remote` exposes a
+stateful React card, and `apps/host` consumes it through this package.
+
+```bash
+pnpm install
+pnpm start
+```
+
+Open the host at http://localhost:3000. The remote also runs as its own
+TanStack Start application at http://localhost:3001.
