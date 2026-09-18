@@ -1,4 +1,4 @@
-# TanStack Start example
+# TanStack Start examples
 
 Both sides of this example are TanStack Start applications.
 
@@ -18,3 +18,10 @@ React and React DOM use the wrapper's singleton defaults.
 Each package's `start` script runs Vite's development server. In Vite's CLI,
 the bare `vite` command means “start”; the literal `vite start` command would
 treat `start` as a project directory.
+
+`rsbuild-remote` exposes the same kind of card through Rspack with a browser
+manifest. Both hosts consume both remotes by manifest URL after hydration.
+These examples exercise same-bundler and cross-bundler client interoperability;
+they do not claim that cross-bundler SSR remote rendering is supported.
+
+`pnpm start` runs all four applications on ports 3000 through 3003.

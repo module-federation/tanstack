@@ -7,18 +7,23 @@ import test from "node:test";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const hostDist = join(root, "apps", "host", "dist");
 const remoteDist = join(root, "apps", "remote", "dist");
+const rsbuildHostDist = join(root, "apps", "rsbuild-host", "dist");
+const rsbuildRemoteDist = join(root, "apps", "rsbuild-remote", "dist");
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
-test("both TanStack Start apps produce client and server builds", () => {
+test("all TanStack Start apps produce client and server builds", () => {
   for (const [name, dist] of [
     ["host", hostDist],
     ["remote", remoteDist],
+    ["rsbuild host", rsbuildHostDist],
+    ["rsbuild remote", rsbuildRemoteDist],
   ]) {
-    assert.ok(existsSync(join(dist, "client", ".vite", "manifest.json")), `${name} client`);
-    assert.ok(existsSync(join(dist, "server", "server.js")), `${name} server`);
+    assert.ok(existsSync(join(dist, "client", "mf-manifest.json")), `${name} client`);
+    const serverEntry = name.startsWith("rsbuild") ? "index.js" : "server.js";
+    assert.ok(existsSync(join(dist, "server", serverEntry)), `${name} server`);
   }
 });
 
@@ -50,4 +55,47 @@ test("host records the TanStack remote and server-side loader", () => {
   const serverFiles = readFileSync(join(hostDist, "server", ".vite", "manifest.json"), "utf8");
   assert.match(serverFiles, /ssrEntryLoader/);
   assert.match(serverFiles, /tanstack_remote/);
+});
+
+test("Vite and Rsbuild publish reciprocal client interoperability contracts", () => {
+  const viteHostManifest = readJson(join(hostDist, "client", "mf-manifest.json"));
+  const rsbuildHostManifest = readJson(join(rsbuildHostDist, "client", "mf-manifest.json"));
+  const rsbuildRemoteClient = readJson(join(rsbuildRemoteDist, "client", "mf-manifest.json"));
+
+  assert.equal(
+    viteHostManifest.remotes.find(({ alias }) => alias === "tanstack_rsbuild_remote")?.moduleName,
+    "StatusCard",
+  );
+  assert.equal(
+    rsbuildHostManifest.remotes.find(({ alias }) => alias === "tanstack_remote")?.entry,
+    "http://127.0.0.1:3001/mf-manifest.json",
+  );
+  assert.equal(
+    rsbuildHostManifest.remotes.find(({ alias }) => alias === "tanstack_rsbuild_remote")?.entry,
+    "http://127.0.0.1:3002/mf-manifest.json",
+  );
+  assert.equal(rsbuildRemoteClient.metaData.remoteEntry.type, "global");
+  assert.equal(rsbuildRemoteClient.metaData.remoteEntry.name, "remoteEntry.js");
+  const statusCard = rsbuildRemoteClient.exposes.find(({ path }) => path === "./StatusCard");
+  assert.ok(statusCard?.assets.css.sync.length > 0, "Rsbuild StatusCard CSS is published");
+  assert.equal(
+    existsSync(join(rsbuildRemoteDist, "server", "serverRemoteEntry.cjs")),
+    false,
+    "client-only cross-bundler remote does not publish an unused SSR container",
+  );
+  assert.equal(
+    existsSync(join(rsbuildHostDist, "server", "mf-manifest.json")),
+    false,
+    "client-only cross-bundler host does not initialize remotes during SSR",
+  );
+
+  for (const manifest of [rsbuildRemoteClient]) {
+    for (const dependency of ["react", "react-dom"]) {
+      assert.equal(
+        manifest.shared.find(({ name }) => name === dependency)?.singleton,
+        true,
+        `${dependency} is a singleton`,
+      );
+    }
+  }
 });

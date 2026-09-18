@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 
 const RemoteStatusCard = lazy(() => import("tanstack_remote/StatusCard"));
+const RsbuildStatusCard = lazy(() => import("tanstack_rsbuild_remote/StatusCard"));
 
 export const Route = createFileRoute("/")({
   loader: () => import("tanstack_remote/StatusCard").then(() => null),
@@ -31,7 +32,25 @@ function Home() {
         <Suspense fallback={<div className="remote-loading">Loading the remote app…</div>}>
           <RemoteStatusCard />
         </Suspense>
+
+        <RsbuildRemoteSlot />
       </section>
     </main>
+  );
+}
+
+function RsbuildRemoteSlot() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return <div className="remote-loading">Rsbuild remote loads after hydration</div>;
+
+  return (
+    <Suspense fallback={<div className="remote-loading">Loading the Rsbuild remote…</div>}>
+      <RsbuildStatusCard />
+    </Suspense>
   );
 }

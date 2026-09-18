@@ -97,3 +97,48 @@ test("host server-renders a component from the TanStack remote", async () => {
     await stopApp(remote);
   }
 });
+
+test("Vite and Rsbuild hosts serve reciprocal browser-interoperability shells", async () => {
+  const viteRemote = startApp("tanstack-start-remote");
+  const rsbuildRemote = startApp("tanstack-start-rsbuild-remote");
+  let viteHost;
+  let rsbuildHost;
+
+  try {
+    await waitForResponse(
+      "http://127.0.0.1:3001/remoteEntry.js",
+      viteRemote,
+      ({ status }) => status === 200,
+    );
+    const manifest = await waitForResponse(
+      "http://127.0.0.1:3002/mf-manifest.json",
+      rsbuildRemote,
+      ({ status }) => status === 200,
+    );
+    assert.match(manifest.body, /tanstack_rsbuild_remote/);
+
+    viteHost = startApp("tanstack-start-host");
+    rsbuildHost = startApp("tanstack-start-rsbuild-host");
+
+    const viteResponse = await waitForResponse(
+      "http://127.0.0.1:3000/",
+      viteHost,
+      ({ status }) => status === 200,
+    );
+    const rsbuildResponse = await waitForResponse(
+      "http://127.0.0.1:3003/",
+      rsbuildHost,
+      ({ status }) => status === 200,
+    );
+
+    assert.match(viteResponse.body, /Rsbuild remote loads after hydration/);
+    assert.match(rsbuildResponse.body, /Rspack host, two remote formats/);
+    assert.match(rsbuildResponse.body, /Loading the Rsbuild remote/);
+    assert.match(rsbuildResponse.body, /Loading the Vite remote/);
+  } finally {
+    if (rsbuildHost) await stopApp(rsbuildHost);
+    if (viteHost) await stopApp(viteHost);
+    await stopApp(rsbuildRemote);
+    await stopApp(viteRemote);
+  }
+});

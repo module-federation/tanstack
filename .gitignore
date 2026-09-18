@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .turbo/
+.mf/
+@mf-types/
 *.log
 pnpm-debug.log*
 coverage/
