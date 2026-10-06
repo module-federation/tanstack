@@ -13,6 +13,9 @@ const output = {
   target: "node",
 } as const;
 
+// The `build` script runs the CJS library first. With TypeScript 7, rsbuild-plugin-dts
+// renames every `.d.ts` in `dist` to `.d.cts` during the CJS pass, which would also
+// consume the ESM declarations if they were emitted first.
 export default defineConfig({
   lib: [
     {

@@ -109,6 +109,11 @@ async-node CommonJS server container and changes the server entry to
 
 The workspace has four TanStack Start apps; see [`apps/README.md`](apps/README.md).
 
+The repository uses pnpm 12 (pinned in `packageManager`). pnpm 12 ships as a
+native binary, so an older global pnpm cannot switch to it automatically;
+install pnpm 12 itself (see https://pnpm.io/installation) before running these
+commands.
+
 ```bash
 pnpm install
 pnpm start

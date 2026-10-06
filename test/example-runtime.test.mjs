@@ -211,8 +211,9 @@ test("Rsbuild remote works as a standalone TanStack Start app", async () => {
   }
 });
 
-// @module-federation/vite 1.22 never self-initializes a container with `exposes` in
-// development, so its React share waits for a host. Production builds hydrate standalone.
+// @module-federation/vite (1.22 through 1.23.2) never self-initializes a container with
+// `exposes` in development, so its React shares are only wired up through a host.
+// Production builds hydrate standalone.
 test.todo("Vite remote hydrates as a standalone app in development");
 
 // Runs last: it stops the Rsbuild remote.

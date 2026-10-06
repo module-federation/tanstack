@@ -70,7 +70,7 @@
     "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
   },
   "scripts": {
-    "build": "rslib build --lib esm && rslib build --lib cjs --no-clean",
+    "build": "rslib build --lib cjs && rslib build --lib esm --no-clean",
     "dev": "rslib build --watch",
     "pack:dry": "npm pack --dry-run",
     "prepack": "pnpm run build",
@@ -78,10 +78,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
-    "@tanstack/react-start": "^1.167.43",
     "@module-federation/rsbuild-plugin": "^2.9.0",
     "@module-federation/vite": "^1.22.0",
     "@rsbuild/core": "^2.0.0",
+    "@tanstack/react-start": "^1.167.43",
     "vite": "^7.0.0 || ^8.0.0"
   },
   "peerDependenciesMeta": {
@@ -102,15 +102,15 @@
     }
   },
   "devDependencies": {
-    "@module-federation/rsbuild-plugin": "2.9.0",
-    "@module-federation/vite": "1.22.0",
-    "@rsbuild/core": "2.2.8",
-    "@rslib/core": "1.0.1",
-    "@tanstack/react-start": "1.168.56",
-    "@types/node": "24.10.1",
+    "@module-federation/rsbuild-plugin": "2.9.2",
+    "@module-federation/vite": "1.23.2",
+    "@rsbuild/core": "2.2.11",
+    "@rslib/core": "1.0.3",
+    "@tanstack/react-start": "1.168.60",
+    "@types/node": "26.6.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "typescript": "6.0.3",
-    "vite": "8.3.0"
+    "typescript": "7.0.2",
+    "vite": "8.3.2"
   }
 }

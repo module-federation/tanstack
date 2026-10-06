@@ -291,9 +291,10 @@ Rsbuild and cross-bundler SSR are in progress.
 - [ ] Run the browser tests against production builds, not only development
       servers.
 - [ ] A Vite remote with `exposes` does not hydrate when opened directly in
-      development: `@module-federation/vite` 1.22 forces host-driven init for
-      exposing containers (`forceClientInjected`). Report upstream, or add a
-      standalone init path.
+      development: `@module-federation/vite` forces host-driven init for
+      exposing containers (`forceClientInjected`). 1.22 hangs; 1.23.2 throws
+      `_jsxDEV is not a function`. Report upstream, or add a standalone init
+      path.
 - [ ] Decide whether the Rsbuild adapter should default hosts to
       `shareStrategy: "loaded-first"`. With `version-first`, one offline remote
       fails host startup with `RUNTIME-003`; the example sets it explicitly.
