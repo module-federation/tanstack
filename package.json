@@ -15,6 +15,7 @@
     "format:check": "prettier --check .",
     "pack:tanstack": "pnpm --filter @module-federation/tanstack pack:dry",
     "start": "pnpm build:package && turbo run start",
+    "preview": "pnpm build && turbo run preview",
     "changeset": "changeset",
     "changeset:status": "changeset status"
   },

@@ -7,6 +7,7 @@
     "build": "rsbuild build",
     "dev": "rsbuild dev --port 3002 --strict-port",
     "start": "rsbuild dev --host 127.0.0.1 --port 3002 --strict-port",
+    "preview": "rsbuild preview --host 127.0.0.1 --port 3002",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

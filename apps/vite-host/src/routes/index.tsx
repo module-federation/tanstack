@@ -6,7 +6,8 @@ const RemoteStatusCard = lazy(() => import("tanstack_vite_remote/StatusCard"));
 const RsbuildStatusCard = lazy(() => import("tanstack_rsbuild_remote/StatusCard"));
 
 export const Route = createFileRoute("/")({
-  loader: () => import("tanstack_vite_remote/StatusCard").then(() => null),
+  // An unavailable remote must not fail the route: the boundary below renders a fallback.
+  loader: () => import("tanstack_vite_remote/StatusCard").then(() => null).catch(() => null),
   component: Home,
 });
 

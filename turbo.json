@@ -18,6 +18,10 @@
       "dependsOn": ["^build", "^typecheck"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": []
+    },
+    "preview": {
+      "cache": false,
+      "persistent": true
     }
   }
 }
