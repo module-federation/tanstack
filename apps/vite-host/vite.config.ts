@@ -24,6 +24,11 @@ export default defineConfig({
           name: "tanstack_rsbuild_remote",
           entry: "http://127.0.0.1:3002/mf-manifest.json",
         },
+        tanstack_rsbuild_ssr_remote: {
+          type: "global",
+          name: "tanstack_rsbuild_ssr_remote",
+          entry: "http://127.0.0.1:3004/mf-manifest.json",
+        },
       },
     }),
     tanstackStart(),

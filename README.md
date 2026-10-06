@@ -58,7 +58,7 @@ and SSR environments from one Vite configuration, so the wrapper leaves target
 selection to `@module-federation/vite` for each environment.
 
 The package supports Node 22.18+, 24.11+, and 26+, plus TanStack Start
-1.167.43+. It is tested with Vite 8, which federated SSR requires; Vite 7 supports browser federation only.
+1.167.43+. The Vite adapter requires Vite 8.
 
 The package root remains a Vite compatibility export. New Vite projects can
 import `/vite` explicitly. Rsbuild projects must import `/rsbuild`:
@@ -91,19 +91,25 @@ gives remotes `publicPath: "auto"` so other origins load their chunks from the
 remote. Hosts should use `shareStrategy: "loaded-first"` so one offline remote
 cannot fail startup.
 
-SSR federation is opt-in with `server: true` on both sides. A remote builds a
-Node container into `dist/client/ssr/` and advertises it in its manifest; a host
-loads remotes on the server from an async-node CommonJS server build. See the
+Rsbuild SSR federation is opt-in with `server: true`. A remote builds a Node
+container, `remoteEntry.ssr.cjs`, next to its browser entry and advertises it in
+its manifest, so Vite and Rsbuild hosts can render it on the server. A host
+loads remotes on the server from an async-node CommonJS server build, and
+renders Vite remotes too when `@module-federation/vite` is installed. See the
 [package README](packages/tanstack/README.md#ssr-federation).
+
+`@module-federation/tanstack/runtime` exports `getRemoteStylesheets`, which
+reads a remote's stylesheets from its manifest so a route can put them in the
+server response's `<head>`.
 
 ## Support status
 
-| Host    | Remote  | Browser federation | Federated SSR              |
-| ------- | ------- | ------------------ | -------------------------- |
-| Vite    | Vite    | Supported          | Supported                  |
-| Vite    | Rsbuild | Supported          | Not supported              |
-| Rsbuild | Vite    | Supported          | Not supported              |
-| Rsbuild | Rsbuild | Supported          | Supported (`server: true`) |
+| Host    | Remote  | Browser federation | Federated SSR                      |
+| ------- | ------- | ------------------ | ---------------------------------- |
+| Vite    | Vite    | Supported          | Supported                          |
+| Vite    | Rsbuild | Supported          | Supported (remote: `server: true`) |
+| Rsbuild | Vite    | Supported          | Supported (host: `server: true`)   |
+| Rsbuild | Rsbuild | Supported          | Supported (both: `server: true`)   |
 
 Known limitations are listed in the
 [package README](packages/tanstack/README.md#known-limitations), and
@@ -129,7 +135,9 @@ http://127.0.0.1:3003, or the Rsbuild SSR host at http://127.0.0.1:3005.
 
 `pnpm test` builds everything, then runs the six apps twice, as development
 servers and as production builds, and drives every host in headless Chromium.
-It checks server-rendered remote markup (including concurrent first requests),
-hydration, remote interactivity, console errors, manifest asset reachability,
-and the fallback and recovery when remotes go offline. Run
+It checks server-rendered remote markup from both bundlers (including
+concurrent first requests), remote stylesheets in the server response,
+hydration, remote interactivity, shared React context, console errors,
+manifest asset reachability, and the fallback and recovery when remotes go
+offline. Run
 `pnpm exec playwright install chromium` once before the first local test run.

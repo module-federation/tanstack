@@ -19,9 +19,10 @@ export default defineConfig({
         remotes: {
           tanstack_rsbuild_ssr_remote:
             "tanstack_rsbuild_ssr_remote@http://127.0.0.1:3004/mf-manifest.json",
+          tanstack_vite_remote: "tanstack_vite_remote@http://127.0.0.1:3001/mf-manifest.json",
         },
       },
-      // Loads remotes on the server through the Module Federation Node runtime.
+      // Loads remotes on the server. Vite remotes also need @module-federation/vite installed.
       server: true,
     }),
   ],

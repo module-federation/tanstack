@@ -12,7 +12,7 @@ export default function StatusCard() {
   }, []);
 
   return (
-    <article className="remote-card">
+    <article className="rsbuild-ssr-card">
       <p className="eyebrow">Federated SSR from Rsbuild</p>
       <p className="remote-status">
         {hydrated ? "Hydrated on the host" : "Rendered on the server"}

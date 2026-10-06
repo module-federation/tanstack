@@ -1,21 +1,22 @@
 # TanStack Start examples
 
-Six TanStack Start applications: a browser-federation host and remote for each
-bundler, plus an Rsbuild pair that federates on the server.
+Six TanStack Start applications: a host and a remote for each bundler, plus an
+Rsbuild pair that federates on the server. Both SSR hosts render a Vite remote
+and an Rsbuild remote into their initial HTML.
 
 `host-context` is a small shared package: each host provides its name through a
 React context, and every remote card shows "Host: …". It is shared as a
 singleton, so the right name only appears when host and remote resolve one
 module instance.
 
-| App                  | Port | Role                                                                   |
-| -------------------- | ---- | ---------------------------------------------------------------------- |
-| `vite-host`          | 3000 | Server-renders the Vite remote; loads the Rsbuild remote on the client |
-| `vite-remote`        | 3001 | Exposes `./StatusCard`, rendered into the Vite host's initial HTML     |
-| `rsbuild-remote`     | 3002 | Exposes `./StatusCard` through a browser manifest                      |
-| `rsbuild-host`       | 3003 | Loads both remotes with `loadRemote()` after hydration                 |
-| `rsbuild-ssr-remote` | 3004 | Exposes `./StatusCard` with a Node container (`server: true`)          |
-| `rsbuild-ssr-host`   | 3005 | Server-renders the Rsbuild SSR remote (`server: true`)                 |
+| App                  | Port | Role                                                                             |
+| -------------------- | ---- | -------------------------------------------------------------------------------- |
+| `vite-host`          | 3000 | Server-renders the Vite and Rsbuild SSR remotes; loads `rsbuild-remote` later    |
+| `vite-remote`        | 3001 | Exposes `./StatusCard`, rendered into both SSR hosts' initial HTML               |
+| `rsbuild-remote`     | 3002 | Exposes `./StatusCard` through a browser manifest                                |
+| `rsbuild-host`       | 3003 | Loads both browser remotes with `loadRemote()` after hydration                   |
+| `rsbuild-ssr-remote` | 3004 | Exposes `./StatusCard` with a Node container (`server: true`) for both SSR hosts |
+| `rsbuild-ssr-host`   | 3005 | Server-renders the Rsbuild SSR and Vite remotes (`server: true`)                 |
 
 From the repository root:
 
@@ -31,22 +32,27 @@ server show "Rendered on the server" until they hydrate.
 
 ## What each host shows
 
-- **Vite host.** The route loader imports the Vite remote, so its card is in
-  the server response and hydrates in place. The Rsbuild card mounts after
-  hydration. Both remotes sit behind `RemoteBoundary`, an error boundary with a
-  fallback card, and the loader ignores a failed import, so an offline remote
-  never fails the route.
+- **Vite host.** The route loader imports the Vite remote and the Rsbuild SSR
+  remote, so both cards are in the server response and hydrate in place. The
+  loader also reads each remote's stylesheets with `getRemoteStylesheets`, and
+  the route's `head` links them, so the cards are styled before JavaScript
+  runs. The `rsbuild-remote` card mounts after hydration. The cards are
+  `lazyRemote` components, which load again after a failure. Every remote sits
+  behind `RemoteBoundary`, an error boundary with a fallback card, and the
+  loader ignores failed imports, so an offline remote never fails the route.
 - **Rsbuild host.** `RemoteCardSlot` calls `loadRemote()` in an effect and
   shows "Remote unavailable" when a remote fails. The host uses
   `shareStrategy: "loaded-first"`, so it does not fetch every remote's
   manifest at startup.
-- **Rsbuild SSR host.** Same pattern as the Vite host, on Rsbuild: the loader
-  imports the remote on the server through the Module Federation Node runtime,
-  which fetches the container from the remote's `ssr/` directory.
+- **Rsbuild SSR host.** Same pattern as the Vite host, on Rsbuild. The
+  Module Federation Node runtime loads the Rsbuild remote's
+  `remoteEntry.ssr.cjs` container, and hands the Vite remote's ES module entry
+  to `@module-federation/vite`'s SSR loader, which is why this app depends on
+  `@module-federation/vite` and `vite`.
 
 Stop a remote while the hosts are open and reload them: each host keeps
 rendering and shows its fallback, then renders the remote again once it is
-back.
+back. The same holds for a host started before its remotes.
 
 ## Notes
 
@@ -58,4 +64,3 @@ back.
 - Opening the Vite remote directly (port 3001) server-renders the page but does
   not hydrate it: `@module-federation/vite` waits for a host to initialize a
   container with `exposes`. It hydrates when loaded through a host.
-- Cross-bundler remotes render on the client only.

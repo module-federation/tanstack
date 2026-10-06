@@ -49,6 +49,16 @@
         "default": "./dist/node-entry-loader.cjs"
       }
     },
+    "./runtime": {
+      "import": {
+        "types": "./dist/runtime.d.ts",
+        "default": "./dist/runtime.js"
+      },
+      "require": {
+        "types": "./dist/runtime.d.cts",
+        "default": "./dist/runtime.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -92,7 +102,8 @@
     "@module-federation/vite": "^1.22.0",
     "@rsbuild/core": "^2.0.0",
     "@tanstack/react-start": "^1.167.43",
-    "vite": "^7.0.0 || ^8.0.0"
+    "react": ">=18.0.0",
+    "vite": "^8.0.0"
   },
   "peerDependenciesMeta": {
     "@tanstack/react-start": {
@@ -109,6 +120,9 @@
     },
     "vite": {
       "optional": true
+    },
+    "react": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -119,6 +133,7 @@
     "@rslib/core": "1.0.3",
     "@tanstack/react-start": "1.168.60",
     "@types/node": "26.6.4",
+    "@types/react": "19.3.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "typescript": "7.0.2",

@@ -1,13 +1,40 @@
+import { getRemoteStylesheets, lazyRemote } from "@module-federation/tanstack/runtime";
 import { createFileRoute } from "@tanstack/react-router";
-import { lazy, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { RemoteBoundary } from "../components/RemoteBoundary";
 
-const RemoteStatusCard = lazy(() => import("tanstack_vite_remote/StatusCard"));
-const RsbuildStatusCard = lazy(() => import("tanstack_rsbuild_remote/StatusCard"));
+// Unlike React.lazy, lazyRemote loads again after a failure, so a server that hit a remote
+// outage renders the remote once it is back.
+const RemoteStatusCard = lazyRemote(() => import("tanstack_vite_remote/StatusCard"));
+const RsbuildStatusCard = lazyRemote(() => import("tanstack_rsbuild_remote/StatusCard"));
+const RsbuildSsrStatusCard = lazyRemote(() => import("tanstack_rsbuild_ssr_remote/StatusCard"));
+
+// Manifests of the remotes this route renders on the server.
+const serverRenderedManifests = [
+  "http://127.0.0.1:3001/mf-manifest.json",
+  "http://127.0.0.1:3004/mf-manifest.json",
+];
 
 export const Route = createFileRoute("/")({
-  // An unavailable remote must not fail the route: the boundary below renders a fallback.
-  loader: () => import("tanstack_vite_remote/StatusCard").then(() => null).catch(() => null),
+  // Loading the server-rendered remotes before render puts their markup in the response.
+  // An unavailable remote must not fail the route: its boundary renders a fallback.
+  loader: async () => {
+    const [stylesheets] = await Promise.all([
+      Promise.all(
+        serverRenderedManifests.map((manifest) =>
+          getRemoteStylesheets(manifest, "./StatusCard").catch(() => []),
+        ),
+      ).then((lists) => lists.flat()),
+      import("tanstack_vite_remote/StatusCard").catch(() => null),
+      import("tanstack_rsbuild_ssr_remote/StatusCard").catch(() => null),
+    ]);
+    return { stylesheets };
+  },
+  // The remote markup arrives with the HTML, so its stylesheets must too. Otherwise it stays
+  // unstyled until the remote's JavaScript loads.
+  head: ({ loaderData }) => ({
+    links: loaderData?.stylesheets.map((href) => ({ href, rel: "stylesheet" })),
+  }),
   component: Home,
 });
 
@@ -33,6 +60,10 @@ function Home() {
 
         <RemoteBoundary fallback="Loading the remote app…" name="Vite remote">
           <RemoteStatusCard />
+        </RemoteBoundary>
+
+        <RemoteBoundary fallback="Loading the Rsbuild SSR remote…" name="Rsbuild SSR remote">
+          <RsbuildSsrStatusCard />
         </RemoteBoundary>
 
         <RsbuildRemoteSlot />

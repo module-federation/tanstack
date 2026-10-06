@@ -6,7 +6,7 @@ export default function StatusCard() {
   const hostName = useHostName();
   const [count, setCount] = useState(0);
   return (
-    <article className="remote-card">
+    <article className="rsbuild-card">
       <p className="eyebrow">Federated from Rsbuild</p>
       <h2>One component, either host.</h2>
       <p>This card is built by Rspack and shared with the Vite host.</p>

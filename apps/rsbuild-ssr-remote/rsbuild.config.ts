@@ -6,7 +6,7 @@ import { tanstackStartModuleFederation } from "@module-federation/tanstack/rsbui
 export default defineConfig({
   dev: { lazyCompilation: false },
   server: {
-    cors: { origin: ["http://127.0.0.1:3005"] },
+    cors: { origin: ["http://127.0.0.1:3000", "http://127.0.0.1:3005"] },
     host: "127.0.0.1",
     port: 3004,
   },

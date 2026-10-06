@@ -1,4 +1,3 @@
-import { join } from "node:path";
 import {
   pluginModuleFederation,
   type ModuleFederationOptions,
@@ -30,20 +29,24 @@ export type TanStackStartRsbuildModuleFederationOptions = {
    * Server-side federation. Pass `true` or an options object to enable it. Defaults to
    * `false`: browser-only federation.
    *
-   * - With `exposes`, the build adds a Node container in `<client dist>/ssr/` and
-   *   advertises it in the browser manifest as `ssrRemoteEntry`.
+   * - With `exposes`, the build adds a Node container, `remoteEntry.ssr.cjs`, next to the
+   *   browser entry (its chunks go in `ssr/`) and advertises it in the browser manifest
+   *   as `ssrRemoteEntry`.
    * - With `remotes`, TanStack Start's server environment loads remotes through the
    *   Module Federation Node runtime, as async-node CommonJS (`dist/server/index.cjs`).
    */
   server?: ServerFederationOptions | true;
 };
 
-/** Directory, inside the browser output, that holds the remote's Node container. */
-export const SERVER_CONTAINER_DIR = "ssr";
-
+// The server container sits next to the manifest, like a Vite remote's SSR entry. Hosts
+// resolve its chunks from either the container URL (Module Federation's Node runtime) or
+// the manifest URL (`@module-federation/vite`), so both must share a directory. The
+// `.cjs` extension matters: `@module-federation/vite` treats any `.ssr.js` URL as an ES
+// module, while for other names it reads the format from the manifest.
+const SERVER_CONTAINER_FILENAME = "remoteEntry.ssr.cjs";
+const SERVER_CHUNK_DIR = "ssr";
 const SERVER_CONTAINER_ENVIRONMENT = "mf-server";
 const NODE_ENTRY_LOADER = "@module-federation/tanstack/node-entry-loader";
-const SERVER_CONTAINER_FILENAME = "remoteEntry.js";
 
 /** Creates browser and optional SSR federation adapters for TanStack Start's Rsbuild integration. */
 export function tanstackStartModuleFederation({
@@ -76,6 +79,7 @@ export function tanstackStartModuleFederation({
       environment: clientEnvironment,
       target: "web",
     }),
+    ...(isHost ? [remoteRetryPlugin()] : []),
     clientCompatibilityPlugin({
       chunkLoadingGlobal: chunkLoadingGlobal ?? `chunk_${federationName}`,
       environment: clientEnvironment,
@@ -100,7 +104,17 @@ export function tanstackStartModuleFederation({
     plugins.push(
       serverContainerEnvironmentPlugin({ clientEnvironment }),
       pluginModuleFederation(
-        withDefaults({ ...containerOptions, filename: SERVER_CONTAINER_FILENAME }, defaultShared),
+        withDefaults(
+          {
+            ...containerOptions,
+            // The browser build owns the manifest and the federated types.
+            dev: false,
+            dts: false,
+            filename: SERVER_CONTAINER_FILENAME,
+            manifest: false,
+          },
+          defaultShared,
+        ),
         { environment: SERVER_CONTAINER_ENVIRONMENT, target: "node" },
       ),
     );
@@ -160,8 +174,8 @@ function withDefaults(
 
 /**
  * Adds the Node container to the browser manifest, as Module Federation's dual-target
- * build does. A Node consumer reads `ssrRemoteEntry` and fetches the container from
- * `<publicPath>ssr/`.
+ * build does. A Node consumer reads `ssrRemoteEntry` and fetches the container from the
+ * manifest's public path.
  */
 function advertiseServerContainer(options: ModuleFederationOptions) {
   const manifest = options.manifest === true ? {} : options.manifest;
@@ -173,18 +187,14 @@ function advertiseServerContainer(options: ModuleFederationOptions) {
     async additionalData(context) {
       const stats = (await userAdditionalData?.(context)) ?? context.stats;
       Object.assign(stats.metaData, {
-        ssrRemoteEntry: {
-          name: SERVER_CONTAINER_FILENAME,
-          path: SERVER_CONTAINER_DIR,
-          type: "commonjs-module",
-        },
+        ssrRemoteEntry: { name: SERVER_CONTAINER_FILENAME, path: "", type: "commonjs-module" },
       });
       return stats;
     },
   };
 }
 
-/** Builds the remote's Node container in its own environment, inside the browser output. */
+/** Builds the remote's Node container in its own environment, into the browser output. */
 function serverContainerEnvironmentPlugin({
   clientEnvironment,
 }: {
@@ -204,7 +214,9 @@ function serverContainerEnvironmentPlugin({
             // Module Federation adds the container entry; the placeholder keeps the
             // environment from bundling the application.
             source: { entry: { [SERVER_CONTAINER_ENVIRONMENT]: "data:text/javascript," } },
-            output: { emitAssets: true, target: "node" },
+            // The output directory is shared with the browser build, which cleans it and
+            // emits the stylesheets.
+            output: { cleanDistPath: false, emitAssets: false, target: "node" },
           };
         },
       });
@@ -223,15 +235,61 @@ function serverContainerEnvironmentPlugin({
         }
 
         // The container ships with the browser assets and loads its chunks over HTTP from
-        // the same origin.
+        // the same public path.
         const publicPath = clientConfig.output.publicPath;
         containerConfig.output ||= {};
-        containerConfig.output.path = join(clientConfig.output.path, SERVER_CONTAINER_DIR);
+        containerConfig.output.path = clientConfig.output.path;
+        containerConfig.output.filename = `${SERVER_CHUNK_DIR}/[name].js`;
+        containerConfig.output.chunkFilename = `${SERVER_CHUNK_DIR}/[id].[contenthash:8].js`;
         containerConfig.output.publicPath =
-          typeof publicPath === "string" && publicPath !== "auto"
-            ? `${publicPath}${SERVER_CONTAINER_DIR}/`
-            : "auto";
+          typeof publicPath === "string" && publicPath !== "auto" ? publicPath : "auto";
       });
+
+      // The container assigns `module.exports` at runtime, so ES module importers see only
+      // a default export. Static re-assignments make `init` and `get` detectable named
+      // exports, which `@module-federation/vite` hosts read when they import the container.
+      api.processAssets(
+        { stage: "summarize", environments: [SERVER_CONTAINER_ENVIRONMENT] },
+        ({ assets, compilation, sources }) => {
+          if (!assets[SERVER_CONTAINER_FILENAME]) return;
+          compilation.updateAsset(
+            SERVER_CONTAINER_FILENAME,
+            (source) => new sources.ConcatSource(source, CONTAINER_NAMED_EXPORTS),
+          );
+        },
+      );
+    },
+  };
+}
+
+const CONTAINER_NAMED_EXPORTS = `
+module.exports.init = module.exports.init;
+module.exports.get = module.exports.get;
+`;
+
+const REMOTE_FAILURE_FACTORY = /(webpackRequire\.m\[id\]\s*=\s*\(\)\s*=>\s*\{)(\s*throw error;)/;
+
+/**
+ * Lets a host load a remote again after a failed load. Module Federation's bundler runtime
+ * replaces a remote module that failed with one that throws, and retries the load on the
+ * next import, but the module cache keeps the first failure's empty exports. A server
+ * that hit a remote outage, or started during one, would then never render that remote.
+ * Rspack's `strictModuleExceptionHandling` caches the error instead, so this removes the
+ * failed module from the cache.
+ */
+function remoteRetryPlugin(): RsbuildPlugin {
+  return {
+    name: "tanstack-start-federation-remote-retry",
+    setup(api) {
+      api.transform(
+        { test: /[\\/]@module-federation[\\/]webpack-bundler-runtime[\\/]dist[\\/]remotes\.c?js$/ },
+        ({ code }) =>
+          // One line, so the rest of the file keeps its positions.
+          code.replace(
+            REMOTE_FAILURE_FACTORY,
+            "$1 if (webpackRequire.c) delete webpackRequire.c[id];$2",
+          ),
+      );
     },
   };
 }

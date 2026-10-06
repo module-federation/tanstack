@@ -313,6 +313,9 @@ importers:
       '@module-federation/runtime':
         specifier: 2.9.2
         version: 2.9.2
+      '@module-federation/vite':
+        specifier: 1.23.2
+        version: 1.23.2(typescript@7.0.2)(vite@8.3.2(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.1))
       '@tanstack/react-router':
         specifier: 1.170.41
         version: 1.170.41(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -353,6 +356,9 @@ importers:
       typescript:
         specifier: 7.0.2
         version: 7.0.2
+      vite:
+        specifier: 8.3.2
+        version: 8.3.2(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.1)
 
   apps/rsbuild-ssr-remote:
     dependencies:
@@ -509,6 +515,9 @@ importers:
       '@types/node':
         specifier: 26.6.4
         version: 26.6.4
+      '@types/react':
+        specifier: 19.3.0
+        version: 19.3.0
       react:
         specifier: 19.3.0
         version: 19.3.0

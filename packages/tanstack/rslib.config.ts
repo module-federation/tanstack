@@ -4,8 +4,10 @@ const entry = {
   index: "./src/index.ts",
   "node-entry-loader": "./src/node-entry-loader.ts",
   rsbuild: "./src/rsbuild.ts",
+  runtime: "./src/runtime.ts",
   shared: "./src/shared.ts",
   vite: "./src/vite.ts",
+  "vite-compat": "./src/vite-compat.ts",
 };
 
 const output = {

@@ -8,18 +8,27 @@ Initial release: Module Federation for TanStack Start on Vite and Rsbuild.
   `@module-federation/vite` with TanStack Start defaults: `remoteEntry.js`, a
   manifest, entry-level host init, and environment-specific build targets.
   Hosts share eager singleton `react` and `react-dom`, so a remote built by
-  another bundler cannot replace the host's React instance.
+  another bundler cannot replace the host's React instance. It requires Vite 8
+  and stops with an error on older versions.
 - `@module-federation/tanstack/rsbuild` wraps
   `@module-federation/rsbuild-plugin` with script-compatible browser output,
   async startup, role-aware React sharing, and `publicPath: "auto"` for
   remotes, so production remotes load from their own origin.
-- Rsbuild SSR federation with `server: true`: remotes ship a Node container in
-  `dist/client/ssr/` and advertise it in their manifest; hosts load remotes on
-  the server from an async-node CommonJS build that keeps `dist/server/index.js`
-  as its entry.
+- Rsbuild SSR federation with `server: true`: remotes ship a Node container,
+  `remoteEntry.ssr.cjs`, with their browser assets and advertise it in their
+  manifest; hosts load remotes on the server from an async-node CommonJS build
+  that keeps `dist/server/index.js` as its entry.
+- Federated SSR for every host and remote pair: Vite hosts render Rsbuild
+  remotes built with `server: true`, and Rsbuild hosts render Vite remotes
+  through `@module-federation/vite`'s SSR loader.
 - `@module-federation/tanstack/node-entry-loader`: the runtime plugin Rsbuild
-  hosts use to load CommonJS remote entries on the server.
-- Supported: federated SSR for Vite to Vite and Rsbuild to Rsbuild, and browser
-  federation for every Vite/Rsbuild host and remote combination.
+  hosts use to load remote server entries. Failures throw `RemoteEntryError`
+  with the failing phase and the original cause.
+- `@module-federation/tanstack/runtime`: `lazyRemote`, a `React.lazy` that
+  loads a failed remote again instead of failing until the server restarts, and
+  `getRemoteStylesheets`, which reads a remote's stylesheets from its manifest
+  so server-rendered remote markup is styled before JavaScript loads.
+- Hosts that hit a remote outage, including at startup, render the remote again
+  once it returns.
 - Tested in development and production builds on Node 22.18, 24, and 26, with
   Vite 8.3, Rsbuild 2.2, TanStack Start 1.168, and React 19.3.
