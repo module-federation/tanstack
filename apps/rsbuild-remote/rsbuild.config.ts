@@ -15,6 +15,9 @@ export default defineConfig({
     tanstackStart(),
     ...tanstackStartModuleFederation({
       federation: {
+        // The type-hints runtime plugin opens a WebSocket to the dev type server, which
+        // races host startup and logs errors in the browser. Types are still generated.
+        dev: { disableDynamicRemoteTypeHints: true },
         exposes: { "./StatusCard": "./src/components/StatusCard.tsx" },
         name: "tanstack_rsbuild_remote",
       },
