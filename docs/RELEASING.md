@@ -4,7 +4,7 @@ summary: Release and trusted npm publishing for @module-federation/tanstack.
 read_when:
   - Preparing a release
   - Updating release automation
-updated_at: 2026-09-16
+updated_at: 2026-10-06
 ---
 
 # Releasing
@@ -41,8 +41,12 @@ The publish workflow reruns the gate, checks that the source is reachable from
 a different dist-tag. Configure npm trusted publishing for repository
 `module-federation/tanstack`, workflow `release.yml`, environment `Publish`.
 
-The release gate builds the Vite and Rsbuild example pairs. It checks the Vite
-Vite host server bundle and both directions of client manifest interoperability. The
-Rsbuild example remote is browser-only; package tests cover the adapter's
-async-node CommonJS SSR configuration. Browser-level coverage for hydrated
-cross-bundler rendering remains follow-up work.
+The release gate builds the Vite and Rsbuild example pairs and checks their
+manifests and server bundles. It then starts all four apps and drives both hosts
+in headless Chromium: Vite-to-Vite SSR markup, hydration, remote interactivity,
+one shared React instance, no console errors, and the fallback when a remote is
+offline. Package tests cover the opt-in Rsbuild async-node CommonJS SSR
+configuration.
+
+The test suite needs Chromium. Locally, run `pnpm exec playwright install
+chromium` once; the workflows install it before `pnpm test`.

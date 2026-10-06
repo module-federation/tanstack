@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, useEffect, useState } from "react";
+import { RemoteBoundary } from "../components/RemoteBoundary";
 
 const RemoteStatusCard = lazy(() => import("tanstack_vite_remote/StatusCard"));
 const RsbuildStatusCard = lazy(() => import("tanstack_rsbuild_remote/StatusCard"));
@@ -16,8 +17,8 @@ function Home() {
         <p className="eyebrow">TanStack Start × Module Federation</p>
         <h1>Two full-stack apps. One React tree.</h1>
         <p className="lede">
-          This page belongs to the Vite host on port 3000. The interactive card below is owned and
-          built by a second TanStack Start application on port 3001.
+          This page belongs to the Vite host on port 3000. The Vite remote on port 3001 renders its
+          card on the server; the Rsbuild remote on port 3002 loads in the browser after hydration.
         </p>
       </header>
 
@@ -29,9 +30,9 @@ function Home() {
           <p>The route, document shell, and server response come from the host app.</p>
         </article>
 
-        <Suspense fallback={<div className="remote-loading">Loading the remote app…</div>}>
+        <RemoteBoundary fallback="Loading the remote app…" name="Vite remote">
           <RemoteStatusCard />
-        </Suspense>
+        </RemoteBoundary>
 
         <RsbuildRemoteSlot />
       </section>
@@ -49,8 +50,8 @@ function RsbuildRemoteSlot() {
   if (!mounted) return <div className="remote-loading">Rsbuild remote loads after hydration</div>;
 
   return (
-    <Suspense fallback={<div className="remote-loading">Loading the Rsbuild remote…</div>}>
+    <RemoteBoundary fallback="Loading the Rsbuild remote…" name="Rsbuild remote">
       <RsbuildStatusCard />
-    </Suspense>
+    </RemoteBoundary>
   );
 }

@@ -18,7 +18,6 @@ export default defineConfig({
         exposes: { "./StatusCard": "./src/components/StatusCard.tsx" },
         name: "tanstack_rsbuild_remote",
       },
-      server: false,
     }),
   ],
 });

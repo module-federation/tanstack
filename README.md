@@ -48,15 +48,17 @@ export default defineConfig({
 ```
 
 Defaults are `remoteEntry.js`, `manifest: true`, and
-`hostInitInjectLocation: "entry"`. React and `react-dom` are shared singleton
-defaults; any explicit entries in `shared` take precedence.
+`hostInitInjectLocation: "entry"`. React and `react-dom` are shared
+singletons; when the config declares `remotes`, they are also eager so the
+host's own React stays in the share scope. Explicit entries in `shared` take
+precedence.
 
 Do not set a global Module Federation `target`. TanStack Start builds client
 and SSR environments from one Vite configuration, so the wrapper leaves target
 selection to `@module-federation/vite` for each environment.
 
 The package supports Node 22.18+, 24.11+, and 26+, plus Vite 7/8 and TanStack
-Start 1.x. Use Vite 8 when developing SSR hosts that load remotes; Vite 7
+Start 1.167.43+. Use Vite 8 when developing SSR hosts that load remotes; Vite 7
 remains supported for production builds.
 
 The package root remains a Vite compatibility export. New Vite projects can
@@ -75,6 +77,7 @@ export default defineConfig({
     ...tanstackStartModuleFederation({
       federation: {
         name: "host",
+        shareStrategy: "loaded-first",
         remotes: { remote: "remote@https://example.test/mf-manifest.json" },
       },
     }),
@@ -82,28 +85,39 @@ export default defineConfig({
 });
 ```
 
-The Rsbuild adapter registers browser and SSR federation plugins by default. It
-emits script-compatible browser output and async-node CommonJS SSR output so
-its manifest can be consumed by Vite and Rsbuild hosts. The wrapper adds eager,
-singleton `react` and `react-dom` entries without changing the caller's config
-object. Set `server: false` for browser-only remotes.
+The Rsbuild adapter emits script-compatible browser output, so its manifest can
+be consumed by Vite and Rsbuild hosts. It adds eager, singleton `react` and
+`react-dom` entries without changing the caller's config object. Hosts should
+use `shareStrategy: "loaded-first"` so one offline remote cannot fail startup.
 
-Server federation mode emits `dist/server/index.cjs`; browser-only mode keeps
-TanStack Start's standard `dist/server/index.js` entry.
+SSR federation for Rsbuild is experimental and opt-in: `server: true` adds an
+async-node CommonJS server container and changes the server entry to
+`dist/server/index.cjs`.
 
-## Example
+## Support status
 
-The workspace includes Vite and Rsbuild pairs. `apps/vite-remote` exposes a
-stateful React card to `apps/vite-host`. `apps/rsbuild-remote` exposes a second card
-to the Vite host, while `apps/rsbuild-host` consumes the Vite remote. Both
-cross-bundler links use manifest URLs. They render after hydration, so this is
-browser interop coverage, not an unverified SSR interoperability claim.
+| Host    | Remote  | Browser federation | Federated SSR                 |
+| ------- | ------- | ------------------ | ----------------------------- |
+| Vite    | Vite    | Supported          | Supported                     |
+| Vite    | Rsbuild | Supported          | Not supported                 |
+| Rsbuild | Vite    | Supported          | Not supported                 |
+| Rsbuild | Rsbuild | Supported          | Experimental (`server: true`) |
+
+[`TODO.md`](TODO.md) tracks the remaining SSR work.
+
+## Examples
+
+The workspace has four TanStack Start apps; see [`apps/README.md`](apps/README.md).
 
 ```bash
 pnpm install
 pnpm start
 ```
 
-This starts all four applications so both same-bundler and cross-bundler paths
-are available. Open the Vite host at http://localhost:3000 or the Rsbuild host
-at http://localhost:3003.
+Open the Vite host at http://127.0.0.1:3000 or the Rsbuild host at
+http://127.0.0.1:3003. Each host renders a card from both remotes.
+
+`pnpm test` builds everything, starts all four apps, and drives both hosts in
+headless Chromium. It checks hydration, remote interactivity, console errors,
+and the fallback when a remote is offline. Run
+`pnpm exec playwright install chromium` once before the first local test run.

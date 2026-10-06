@@ -13,12 +13,13 @@ export default defineConfig({
       federation: {
         dts: false,
         name: "tanstack_rsbuild_host",
+        // Resolve remotes on demand so one offline remote cannot block host startup.
+        shareStrategy: "loaded-first",
         remotes: {
           tanstack_vite_remote: "tanstack_vite_remote@http://127.0.0.1:3001/mf-manifest.json",
           tanstack_rsbuild_remote: "tanstack_rsbuild_remote@http://127.0.0.1:3002/mf-manifest.json",
         },
       },
-      server: false,
     }),
   ],
 });

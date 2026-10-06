@@ -25,14 +25,18 @@ type ServerFederationOptions =
 export type TanStackStartRsbuildModuleFederationOptions = {
   client?: ClientFederationOptions;
   federation: ModuleFederationOptions;
-  server?: ServerFederationOptions;
+  /**
+   * Experimental SSR federation. Pass `true` or an options object to add an async-node
+   * CommonJS server container. Defaults to `false`: browser-only federation.
+   */
+  server?: ServerFederationOptions | true;
 };
 
-/** Creates browser and SSR federation adapters for TanStack Start's Rsbuild integration. */
+/** Creates browser and optional SSR federation adapters for TanStack Start's Rsbuild integration. */
 export function tanstackStartModuleFederation({
   client = {},
   federation,
-  server = {},
+  server = false,
 }: TanStackStartRsbuildModuleFederationOptions): RsbuildPlugin[] {
   const {
     chunkLoadingGlobal,
@@ -66,7 +70,7 @@ export function tanstackStartModuleFederation({
     environment: serverEnvironment = "ssr",
     forceCommonJsOutput = true,
     ...serverOverrides
-  } = server;
+  } = server === true ? {} : server;
   const serverFederationOptions = withDefaults(
     { ...federation, ...serverOverrides },
     forceCommonJsOutput ? "serverRemoteEntry.cjs" : "serverRemoteEntry.js",

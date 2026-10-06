@@ -54,8 +54,26 @@ test("applies TanStack-safe defaults", () => {
   assert.equal(options.manifest, true);
   assert.equal(options.hostInitInjectLocation, "entry");
   assert.equal(options.shared.react.shareConfig.singleton, true);
-  assert.equal(options.shared.react.shareConfig.eager, false, "Vite defaults stay non-eager");
+  assert.equal(options.shared.react.shareConfig.eager, false, "remote-only builds stay lazy");
   assert.equal(options.shared["react-dom"].shareConfig.singleton, true);
+});
+
+test("Vite hosts provide their own React eagerly so remotes cannot replace it", () => {
+  const options = upstreamOptions({
+    name: "host",
+    remotes: { remote: { type: "module", name: "remote", entry: "remoteEntry.js" } },
+  });
+  for (const dependency of ["react", "react-dom"]) {
+    assert.equal(options.shared[dependency].shareConfig.singleton, true);
+    assert.equal(options.shared[dependency].shareConfig.eager, true, `${dependency} is eager`);
+  }
+
+  const overridden = upstreamOptions({
+    name: "host",
+    remotes: { remote: { type: "module", name: "remote", entry: "remoteEntry.js" } },
+    shared: { react: { singleton: true } },
+  });
+  assert.equal(overridden.shared.react.shareConfig.eager, false, "explicit entries win");
 });
 
 test("preserves explicit federation settings and shared entries", () => {
@@ -111,9 +129,10 @@ test("Rsbuild defaults make synchronous React shares eager without mutating over
   assert.deepEqual(shared["react-dom"], { eager: true, singleton: true });
 });
 
-test("Rsbuild configures separate browser and async-node federation environments", () => {
+test("Rsbuild opt-in SSR configures separate browser and async-node environments", () => {
   const plugins = tanstackStartRsbuildModuleFederation({
     federation: { name: "test_remote" },
+    server: true,
   });
 
   assert.deepEqual(
@@ -160,9 +179,9 @@ test("Rsbuild configures separate browser and async-node federation environments
   assert.equal(
     tanstackStartRsbuildModuleFederation({
       federation: { name: "browser_only" },
-      server: false,
     }).length,
     2,
+    "SSR federation is opt-in",
   );
 
   const esmPlugins = tanstackStartRsbuildModuleFederation({

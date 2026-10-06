@@ -3,7 +3,9 @@
 This file tracks the work required before `@module-federation/tanstack` can
 claim SSR support across both Vite and Rsbuild/Rspack.
 
-Assessment date: 2026-09-18.
+Assessment date: 2026-09-18. Updated 2026-10-06: the Rsbuild server adapter is now
+opt-in (`server: true`), and browser tests cover hydration, shared React
+identity, and remote outages for every host/remote pair.
 
 ## Current support boundary
 
@@ -12,11 +14,11 @@ Assessment date: 2026-09-18.
 | Vite    | Vite    | Supported            | The Vite host response contains remote markup before hydration.                 |
 | Vite    | Rsbuild | Not supported        | The Rsbuild remote loads in the browser after hydration.                        |
 | Rsbuild | Vite    | Not supported        | The Vite remote loads through the browser runtime after hydration.              |
-| Rsbuild | Rsbuild | Not yet supported    | The adapter can build a server container, but no end-to-end SSR fixture exists. |
+| Rsbuild | Rsbuild | Experimental         | `server: true` builds a server container, but no end-to-end SSR fixture exists. |
 
 The Rsbuild examples are TanStack Start SSR applications, so their local route
-shells render on the server. Their Module Federation configuration passes
-`server: false`; federated components are client-only. Do not describe that as
+shells render on the server. Their Module Federation configuration uses the
+default browser-only mode; federated components are client-only. Do not describe that as
 federated SSR.
 
 The supported claim today is:
@@ -70,8 +72,8 @@ Reference implementation paths:
 - Core only installs its startup dependency handling when
   `experiments.asyncStartup` is enabled. The TanStack adapter does not default
   this option today.
-- Both committed Rsbuild examples pass `server: false`, so the server adapter is
-  covered by compiler-contract tests, not by a running host/remote pair.
+- Both committed Rsbuild examples use the default browser-only mode, so the
+  server adapter is covered by compiler-contract tests, not by a running host/remote pair.
 
 Reference implementation paths:
 
@@ -231,7 +233,7 @@ This aligns the host with the existing Rsbuild server output.
 
 | Host      | Remote    | Development  | Production | Initial remote HTML | Hydration and interaction |
 | --------- | --------- | ------------ | ---------- | ------------------- | ------------------------- |
-| Vite 8    | Vite 8    | Existing     | Existing   | Existing            | Add browser assertion     |
+| Vite 8    | Vite 8    | Existing     | Add        | Existing            | Existing (development)    |
 | Vite 7    | Vite 7    | Not required | Add        | Add                 | Add                       |
 | Rsbuild 2 | Rsbuild 2 | Add          | Add        | Add                 | Add                       |
 | Vite 8    | Rsbuild 2 | Add          | Add        | Add                 | Add                       |
@@ -258,7 +260,7 @@ Each matrix row must verify:
 
 - [ ] Update the root README only after a matrix row satisfies every acceptance
       criterion.
-- [ ] Document `server: false` as browser-only federation, not SSR federation.
+- [x] Document browser-only federation as the Rsbuild default and SSR as opt-in.
 - [ ] Document `dist/server/index.cjs` when the CommonJS Rsbuild server adapter
       is enabled.
 - [ ] Document the chosen cross-bundler server-entry format.
@@ -283,3 +285,15 @@ SSR support for a host/remote combination is complete only when:
 
 Until then, keep the package description precise: Vite-to-Vite SSR is supported;
 Rsbuild and cross-bundler SSR are in progress.
+
+## Example and development gaps
+
+- [ ] Run the browser tests against production builds, not only development
+      servers.
+- [ ] A Vite remote with `exposes` does not hydrate when opened directly in
+      development: `@module-federation/vite` 1.22 forces host-driven init for
+      exposing containers (`forceClientInjected`). Report upstream, or add a
+      standalone init path.
+- [ ] Decide whether the Rsbuild adapter should default hosts to
+      `shareStrategy: "loaded-first"`. With `version-first`, one offline remote
+      fails host startup with `RUNTIME-003`; the example sets it explicitly.
