@@ -13,6 +13,8 @@ export default defineConfig({
       federation: {
         dts: false,
         name: "tanstack_rsbuild_host",
+        // Workspace dependencies declare "workspace:*", which is not a semver range.
+        shared: { "example-host-context": { requiredVersion: "*", singleton: true } },
         // Resolve remotes on demand so one offline remote cannot block host startup.
         shareStrategy: "loaded-first",
         remotes: {

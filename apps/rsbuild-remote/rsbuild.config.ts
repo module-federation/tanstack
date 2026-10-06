@@ -20,6 +20,8 @@ export default defineConfig({
         dev: { disableDynamicRemoteTypeHints: true },
         exposes: { "./StatusCard": "./src/components/StatusCard.tsx" },
         name: "tanstack_rsbuild_remote",
+        // Workspace dependencies declare "workspace:*", which is not a semver range.
+        shared: { "example-host-context": { requiredVersion: "*", singleton: true } },
       },
     }),
   ],

@@ -1,7 +1,9 @@
+import { useHostName } from "example-host-context";
 import { useEffect, useState } from "react";
 import "./StatusCard.css";
 
 export default function StatusCard() {
+  const hostName = useHostName();
   const [count, setCount] = useState(0);
   const [hydrated, setHydrated] = useState(false);
 
@@ -19,6 +21,7 @@ export default function StatusCard() {
       </div>
       <h2>Owned by the remote app</h2>
       <p>This component crossed an application boundary while React stayed a shared singleton.</p>
+      <p className="host-name">Host: {hostName}</p>
       <button type="button" onClick={() => setCount((value) => value + 1)}>
         Remote count <strong>{count}</strong>
       </button>

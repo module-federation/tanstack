@@ -3,6 +3,11 @@
 Six TanStack Start applications: a browser-federation host and remote for each
 bundler, plus an Rsbuild pair that federates on the server.
 
+`host-context` is a small shared package: each host provides its name through a
+React context, and every remote card shows "Host: …". It is shared as a
+singleton, so the right name only appears when host and remote resolve one
+module instance.
+
 | App                  | Port | Role                                                                   |
 | -------------------- | ---- | ---------------------------------------------------------------------- |
 | `vite-host`          | 3000 | Server-renders the Vite remote; loads the Rsbuild remote on the client |

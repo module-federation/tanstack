@@ -8,6 +8,11 @@ export default defineConfig({
     tanstackStartModuleFederation({
       name: "tanstack_vite_host",
       dts: false,
+      shared: {
+        // The root route renders the provider synchronously, so a Vite host must provide
+        // the package eagerly. "workspace:*" is not a semver range, hence requiredVersion.
+        "example-host-context": { eager: true, requiredVersion: "*", singleton: true },
+      },
       remotes: {
         tanstack_vite_remote: {
           type: "module",

@@ -1,4 +1,5 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import { HostContext } from "example-host-context";
 import type { ReactNode } from "react";
 import stylesHref from "../styles.css?url";
 
@@ -17,7 +18,9 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <RootDocument>
-      <Outlet />
+      <HostContext.Provider value="Vite host">
+        <Outlet />
+      </HostContext.Provider>
     </RootDocument>
   );
 }

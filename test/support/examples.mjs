@@ -52,9 +52,9 @@ export function describeExamples(script, { outageRemotes = remotes } = {}) {
   });
 
   test("SSR hosts render remote markup for concurrent first requests", async () => {
-    for (const [host, marker] of [
-      ["viteHost", cards.vite],
-      ["rsbuildSsrHost", cards.rsbuildSsr],
+    for (const [host, marker, hostName] of [
+      ["viteHost", cards.vite, "Vite host"],
+      ["rsbuildSsrHost", cards.rsbuildSsr, "Rsbuild SSR host"],
     ]) {
       const responses = await Promise.all(
         Array.from({ length: 8 }, () => fetch(apps[host].url).then(readResponse)),
@@ -89,6 +89,7 @@ export function describeExamples(script, { outageRemotes = remotes } = {}) {
       await page.getByText("Hydrated on the host").waitFor({ timeout: 20_000 });
       await assertInteractive(page, cards.vite);
       await assertInteractive(page, cards.rsbuild);
+      await assertHostContext(page, [cards.vite, cards.rsbuild], "Vite host");
     });
   });
 
@@ -96,6 +97,7 @@ export function describeExamples(script, { outageRemotes = remotes } = {}) {
     await withPage(apps.rsbuildHost.url, async (page) => {
       await assertInteractive(page, cards.vite);
       await assertInteractive(page, cards.rsbuild);
+      await assertHostContext(page, [cards.vite, cards.rsbuild], "Rsbuild host");
     });
   });
 
@@ -103,12 +105,20 @@ export function describeExamples(script, { outageRemotes = remotes } = {}) {
     await withPage(apps.rsbuildSsrHost.url, async (page) => {
       await page.getByText("Hydrated on the host").waitFor({ timeout: 20_000 });
       await assertInteractive(page, cards.rsbuildSsr);
+      await assertHostContext(page, [cards.rsbuildSsr], "Rsbuild SSR host");
     });
   });
 
   test("Rsbuild remotes work as standalone TanStack Start apps", async () => {
-    await withPage(apps.rsbuildRemote.url, (page) => assertInteractive(page, cards.rsbuild));
-    await withPage(apps.rsbuildSsrRemote.url, (page) => assertInteractive(page, cards.rsbuildSsr));
+    for (const [key, card] of [
+      ["rsbuildRemote", cards.rsbuild],
+      ["rsbuildSsrRemote", cards.rsbuildSsr],
+    ]) {
+      await withPage(apps[key].url, async (page) => {
+        await assertInteractive(page, card);
+        await assertHostContext(page, [card], "standalone");
+      });
+    }
   });
 
   // @module-federation/vite never initializes a container with `exposes` when it is opened
@@ -210,6 +220,14 @@ function manifestAssets(manifest) {
     ...assets.css.async,
   ]);
   return [...new Set([...entries, ...files])];
+}
+
+/** Proves each remote card reads the context its host provides through a shared module. */
+async function assertHostContext(page, cardTexts, hostName) {
+  for (const cardText of cardTexts) {
+    const card = page.locator("article", { hasText: cardText });
+    await card.getByText(`Host: ${hostName}`).waitFor({ timeout: 5_000 });
+  }
 }
 
 /** Clicks a remote card's counter and proves the remote's state updates on the host. */

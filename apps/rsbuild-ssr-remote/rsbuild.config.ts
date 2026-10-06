@@ -19,6 +19,8 @@ export default defineConfig({
         dts: false,
         exposes: { "./StatusCard": "./src/components/StatusCard.tsx" },
         name: "tanstack_rsbuild_ssr_remote",
+        // Workspace dependencies declare "workspace:*", which is not a semver range.
+        shared: { "example-host-context": { requiredVersion: "*", singleton: true } },
       },
       // Builds an async-node server container next to the browser container, so an
       // Rsbuild host can render this card on the server.

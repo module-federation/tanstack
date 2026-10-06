@@ -59,6 +59,9 @@ through `test/support/examples.mjs` on every supported Node line in CI.
 - [x] `useState`, `useEffect`, Suspense, and error boundaries across the
       federation boundary (counter, hydration status, lazy remote components,
       `RemoteBoundary`).
+- [x] React context created by each host and read by every remote, including
+      across bundlers and in server-rendered HTML, through the singleton
+      `example-host-context` package.
 - [x] Document `server: true`, the `ssr/` container, and the server entries.
 
 ## Open
@@ -92,8 +95,6 @@ limitations.
 
 ### Shared dependencies
 
-- [ ] Test React context created by the host and consumed by a remote, through
-      a shared singleton package.
 - [ ] Decide the React support range. TanStack Start allows React 18 and 19;
       only React 19 is tested.
 - [ ] Validate version-mismatch warnings for incompatible React majors, and

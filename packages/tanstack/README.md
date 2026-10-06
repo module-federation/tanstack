@@ -58,6 +58,10 @@ Defaults:
   builds stay lazy.
 - Any entry you pass in `shared` replaces the default for that package.
 
+A Vite host renders before lazy shared modules resolve, so mark any other shared
+package the host imports from its entry or root route as `eager: true`, as the
+wrapper does for React. Remotes can keep their shares lazy.
+
 The wrapper omits the global Module Federation `target` option. TanStack
 Start's client and SSR environments need `@module-federation/vite` to select
 `web` and `node` independently.
