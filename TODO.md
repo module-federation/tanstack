@@ -1,300 +1,168 @@
-# SSR completion TODO
+# Federation TODO
 
-This file tracks the work required before `@module-federation/tanstack` can
-claim SSR support across both Vite and Rsbuild/Rspack.
+This file tracks what `@module-federation/tanstack` proves today and the work
+left after 0.1.0.
 
-Assessment date: 2026-09-18. Updated 2026-10-06: the Rsbuild server adapter is now
-opt-in (`server: true`), and browser tests cover hydration, shared React
-identity, and remote outages for every host/remote pair.
+Assessment date: 2026-10-06.
 
-## Current support boundary
+## Support boundary
 
-| Host    | Remote  | Federated SSR status | Current proof                                                                   |
-| ------- | ------- | -------------------- | ------------------------------------------------------------------------------- |
-| Vite    | Vite    | Supported            | The Vite host response contains remote markup before hydration.                 |
-| Vite    | Rsbuild | Not supported        | The Rsbuild remote loads in the browser after hydration.                        |
-| Rsbuild | Vite    | Not supported        | The Vite remote loads through the browser runtime after hydration.              |
-| Rsbuild | Rsbuild | Experimental         | `server: true` builds a server container, but no end-to-end SSR fixture exists. |
+| Host    | Remote  | Browser federation | Federated SSR | Proof (development and production)                                   |
+| ------- | ------- | ------------------ | ------------- | -------------------------------------------------------------------- |
+| Vite    | Vite    | Supported          | Supported     | Remote markup in the host's initial HTML, hydration, outage/recovery |
+| Vite    | Rsbuild | Supported          | Not supported | The Rsbuild remote loads in the browser after hydration              |
+| Rsbuild | Vite    | Supported          | Not supported | The Vite remote loads through the browser runtime                    |
+| Rsbuild | Rsbuild | Supported          | Supported     | `rsbuild-ssr-host` renders `rsbuild-ssr-remote` on the server        |
 
-The Rsbuild examples are TanStack Start SSR applications, so their local route
-shells render on the server. Their Module Federation configuration uses the
-default browser-only mode; federated components are client-only. Do not describe that as
-federated SSR.
+`test/example-runtime.test.mjs` (development servers) and
+`test/example-production.test.mjs` (production builds) run the same scenarios
+through `test/support/examples.mjs` on every supported Node line in CI.
 
-The supported claim today is:
+## Done for 0.1.0
 
-> Vite-to-Vite federated SSR, plus Vite/Rsbuild browser interoperability.
+### Rsbuild-to-Rsbuild SSR
 
-## Evidence behind this boundary
+- [x] Default `experiments.asyncStartup: true` for browser and server
+      federation, preserving an explicit `false`.
+- [x] Share `react` and `react-dom` as singletons: eager for hosts, lazy for
+      remotes and server containers, so remotes cannot replace a host's React.
+- [x] Build a remote's Node container in a dedicated `mf-server` environment,
+      emitted to `dist/client/ssr/` with the browser assets. It contains only
+      the exposed modules; the app's server bundle is never published.
+- [x] Advertise the container in the browser manifest as `ssrRemoteEntry`,
+      which Module Federation otherwise only does for Rslib's `dual` target.
+- [x] Give remotes `publicPath: "auto"`. TanStack Start derives `/` from
+      `server.base`, which made production remotes request their chunks from
+      the host's origin, and made Node hosts fail to fetch them.
+- [x] Load remotes in a host's server bundle as async-node CommonJS, keep
+      `dist/server/index.js` as an ES module that re-exports it, and write the
+      server output to disk in development so async-node chunks match the
+      in-memory entry.
+- [x] Load CommonJS remote entries with `require`-based Node built-ins
+      (`@module-federation/tanstack/node-entry-loader`). Rsbuild's development
+      runner cannot evaluate Module Federation's `import("vm")`.
+- [x] Dedicated fixtures: `apps/rsbuild-ssr-remote` and `apps/rsbuild-ssr-host`,
+      importing the remote in a route loader.
+- [x] Acceptance: initial HTML contains remote markup (not a placeholder), for
+      eight concurrent first requests; hydration without warnings; the remote
+      stays interactive; one React instance; no `RUNTIME-*` or chunk errors;
+      the manifest declares a `commonjs-module` server entry; every
+      manifest-referenced asset returns 200; the container has no
+      build-machine paths.
 
-### Vite-to-Vite SSR works
+### Hardening
 
-- [`packages/tanstack/src/vite.ts`](packages/tanstack/src/vite.ts) registers one
-  Vite federation plugin for TanStack Start's client and server environments.
-- The wrapper leaves `target` unset so `@module-federation/vite` selects `web`
-  for the client and `node` for SSR.
-- `hostInitInjectLocation: "entry"` initializes federation before TanStack
-  hydrates an application without an `index.html` entry.
-- `module-federation/vite` enables its SSR entry loader for every production
-  build and for Vite 8 development. Vite 7 development does not have the
-  ModuleRunner support required by this path.
-- Vite remotes emit a separate ESM `remoteEntry.ssr.js` and include it in
-  `mf-manifest.json` as `metaData.ssrRemoteEntry`.
-- The Vite SSR loader resolves the manifest entry, links shared packages to the
-  host, and evaluates the remote through Vite ModuleRunner, `vm.SourceTextModule`,
-  or a temporary ESM graph.
-- [`test/example-runtime.test.mjs`](test/example-runtime.test.mjs) verifies that
-  the Vite host's initial HTML contains `Owned by the remote app` and
-  `Rendered on the server`.
+- [x] Production builds (`vite preview`, `rsbuild preview`) run the same browser
+      scenarios as development servers.
+- [x] Hosts render a fallback, not a 500 or a blank page, while remotes are
+      offline, and render remote markup again once they return.
+- [x] `useState`, `useEffect`, Suspense, and error boundaries across the
+      federation boundary (counter, hydration status, lazy remote components,
+      `RemoteBoundary`).
+- [x] Document `server: true`, the `ssr/` container, and the server entries.
 
-Reference implementation paths:
+## Open
 
-- `module-federation/vite/src/utils/ssrCapabilities.ts`
-- `module-federation/vite/src/plugins/pluginSSRRemoteEntry.ts`
-- `module-federation/vite/src/utils/ssrEntryLoader.ts`
-- `module-federation/vite/src/plugins/pluginAddEntry.ts`
-- `module-federation/vite/src/virtualModules/virtualRuntimeInitStatus.ts`
+### Upstream issues
 
-### Rsbuild has the required pieces, but not the proof
+Report these to `module-federation/vite`; they are documented as known
+limitations.
 
-- [`packages/tanstack/src/rsbuild.ts`](packages/tanstack/src/rsbuild.ts) installs
-  separate `web` and `node` federation plugins for TanStack Start's `client`
-  and `ssr` environments.
-- The browser compiler emits script/JSONP-compatible output.
-- The server compiler can emit async-node CommonJS output with
-  `serverRemoteEntry.cjs` and `dist/server/index.cjs`.
-- React and React DOM default to eager singletons for Rsbuild. TanStack's server
-  bundle imports React synchronously, and Core reports `RUNTIME-006` when those
-  shares are lazy.
-- Core's `target: "node"` path changes the compiler target to `async-node`,
-  creates a CommonJS server container, and injects
-  `@module-federation/node/runtimePlugin`.
-- Core only installs its startup dependency handling when
-  `experiments.asyncStartup` is enabled. The TanStack adapter does not default
-  this option today.
-- Both committed Rsbuild examples use the default browser-only mode, so the
-  server adapter is covered by compiler-contract tests, not by a running host/remote pair.
+- [ ] A Vite remote with `exposes` does not hydrate when opened directly in
+      development: the plugin forces host-driven init for exposing containers
+      (`forceClientInjected`), so the remote's own React shares never resolve.
+      1.22 hangs; 1.23.2 throws `_jsxDEV is not a function`.
+- [ ] Since 1.23.0, the same remote also fails standalone in production
+      (`x is not a function` from the `react-dom/client` share). Bisected:
+      1.22.0 and 1.22.1 hydrate; 1.23.0, 1.23.1, and 1.23.2 do not.
+- [ ] In development, a Vite host's dev server exits with an unhandled
+      `TypeError: fetch failed` (ECONNREFUSED) after a Vite remote it has
+      server-rendered through the ModuleRunner transport (`/__mf_runner__`)
+      goes offline. Production hosts are unaffected.
 
-Reference implementation paths:
+### SSR quality
 
-- `module-federation/core/packages/rsbuild-plugin/src/cli/index.ts`
-- `module-federation/core/packages/rsbuild-plugin/src/utils/ssr.ts`
-- `module-federation/core/packages/node/src/runtimePlugin.ts`
-- `module-federation/core/packages/enhanced/src/lib/container/ModuleFederationPlugin.ts`
-- `module-federation/core/packages/webpack-bundler-runtime/src/installInitialConsumes.ts`
+- [ ] Include the remote's stylesheets in SSR responses. Neither SSR host emits
+      the remote's CSS links, so remote markup is unstyled until its JavaScript
+      loads. This likely needs a helper that reads `exposes[].assets.css` from
+      the remote snapshot and feeds TanStack Start's route `head`.
+- [ ] Revalidate a changed remote manifest and server entry without restarting
+      the host, and prove no stale container or shared module is served.
+- [ ] Test cyclic imports in a server remote graph.
 
-### Cross-bundler SSR needs an explicit transport contract
+### Shared dependencies
+
+- [ ] Test React context created by the host and consumed by a remote, through
+      a shared singleton package.
+- [ ] Decide the React support range. TanStack Start allows React 18 and 19;
+      only React 19 is tested.
+- [ ] Validate version-mismatch warnings for incompatible React majors, and
+      that `import: false` fails at startup when the host cannot provide a
+      package.
+
+### Versions
+
+- [ ] Vite 7: `@vitejs/plugin-react` 6 requires Vite 8, so a Vite 7 run needs
+      its own dependency set (`@vitejs/plugin-react` 5). Until then the docs
+      claim Vite 8 only, while the peer range still allows Vite 7.
+
+### Error reporting
+
+- [ ] Preserve the original network or execution error, and distinguish
+      manifest, entry, chunk, and shared-dependency failures.
+- [ ] Add optional observability reports for raw runtime codes that do not
+      contain enough context.
+
+## Cross-bundler SSR (after 0.1.0)
 
 The two server entry formats differ:
 
 - Vite emits an ESM SSR entry and an ESM dependency graph.
-- The current Rsbuild adapter emits a CommonJS container and async-node chunks.
+- The Rsbuild adapter emits a CommonJS container (`ssr/remoteEntry.js`) with
+  async-node chunks.
 
-The Vite loader can `require()` a local CommonJS entry. For an HTTP CommonJS
-entry, `createRequire()` cannot load the URL, and the loader falls through to
-paths designed around ESM source. That is not a reliable Rsbuild remote loader.
+The Vite SSR loader can `require()` a local CommonJS entry. For an HTTP
+CommonJS entry, `createRequire()` cannot load the URL, and the loader falls
+through to paths designed around ESM source. In the other direction, Core's Node
+runtime has ESM loading support, but nothing proves that an Rsbuild host can
+load Vite's manifest-declared ESM SSR entry, preserve the host's React
+instance, and hydrate the result. Both directions need changes in
+`@module-federation/vite` or Core.
 
-In the other direction, Core's Node runtime has ESM loading support, but this
-repository does not prove that an Rsbuild host can load Vite's manifest-declared
-ESM SSR entry, preserve the host React instance, and hydrate the result.
+### Vite host with an Rsbuild SSR remote
 
-## Phase 1: finish Rsbuild-to-Rsbuild SSR
+Choose one server-entry strategy:
 
-### Adapter defaults
+- Option A, emit an ESM SSR entry from Rsbuild: decide how the manifest
+  identifies both server formats (it has one `ssrRemoteEntry` slot), keep the
+  chunks reachable over HTTP, and verify Vite's temporary-file and VM
+  strategies can link the graph.
+- Option B, teach the Vite loader to evaluate HTTP CommonJS containers: a
+  bounded loader that reuses Core's Node chunk loading, resolves async chunks
+  from the remote public path, preserves module-cache identity for singletons,
+  applies the ESM loader's fetch timeout and body limits, and avoids unbounded
+  `eval`.
 
-- [ ] Merge `experiments.asyncStartup: true` into the Rsbuild browser and server
-      federation options.
-- [ ] Preserve an explicit `experiments.asyncStartup: false` override.
-- [ ] Keep `react` and `react-dom` eager singletons by default.
-- [ ] Cover React subpaths used by the compiled application, including
-      `react/jsx-runtime` and `react-dom/client`, without creating a second React
-      instance.
-- [ ] Assert that Core's node target injects the Node runtime plugin exactly
-      once.
-- [ ] Confirm that two environment-scoped Rsbuild plugins continue to install
-      one browser container and one server container.
+Acceptance: Vite 8 development and production render and hydrate the Rsbuild
+remote, remote CSS arrives without a flash, and manifest revalidation replaces
+a changed remote without restarting the host.
 
-### Server-enabled fixtures
+### Rsbuild host with a Vite SSR remote
 
-- [ ] Add a dedicated Rsbuild remote with the server adapter enabled.
-- [ ] Expose a stateful component from both `remoteEntry.js` and
-      `serverRemoteEntry.cjs`.
-- [ ] Add a dedicated Rsbuild host with the server adapter enabled.
-- [ ] Import the remote through a route loader or another real async boundary.
-- [ ] Start the production remote from `dist/server/index.cjs`.
-- [ ] Serve the client manifest, server entry, server chunks, JavaScript, CSS,
-      and federated type archive from stable URLs.
-- [ ] Start the production host from `dist/server/index.cjs`.
-- [ ] Ensure development and production use the same remote naming and share
-      scope.
-
-### Rsbuild SSR acceptance criteria
-
-- [ ] The host's initial HTML contains remote component markup.
-- [ ] The initial HTML does not contain only a loading placeholder.
-- [ ] Hydration completes without warnings or subtree replacement.
-- [ ] A remote button remains interactive after hydration.
-- [ ] Host context and hooks work inside the remote component.
-- [ ] React and React DOM resolve to one physical host-owned instance.
-- [ ] No `RUNTIME-006`, `RUNTIME-001`, or missing chunk error appears.
-- [ ] The remote manifest declares a `commonjs-module` server entry.
-- [ ] Every server entry import and async chunk is reachable in production.
-- [ ] The built server output contains no build-machine absolute paths.
-
-## Phase 2: support a Vite host with an Rsbuild SSR remote
-
-Choose and document one server-entry strategy before implementing this path.
-
-### Option A: emit an ESM SSR entry from Rsbuild
-
-This aligns the remote with the existing Vite SSR loader.
-
-- [ ] Determine whether the Rsbuild server compiler can emit a second ESM
-      container without changing the CommonJS entry used by Rsbuild hosts.
-- [ ] Decide how the manifest identifies both server formats. The current
-      manifest has one `ssrRemoteEntry` slot.
-- [ ] Keep server chunks portable and reachable over HTTP.
-- [ ] Verify that Vite's temporary-file and VM strategies can link the emitted
-      graph.
-
-### Option B: teach the Vite loader to evaluate HTTP CommonJS containers
-
-This aligns the host with the existing Rsbuild server output.
-
-- [ ] Add a bounded HTTP CommonJS loader rather than passing an HTTP URL to
-      `createRequire()`.
-- [ ] Reuse Core's Node chunk-loading behavior where possible.
-- [ ] Resolve relative async chunks from the remote public path.
-- [ ] Preserve Node module-cache identity for React and other singletons.
-- [ ] Apply the same fetch timeout and maximum-body limits used by the ESM
-      loader.
-- [ ] Avoid unrestricted `eval` or unbounded code fetching.
-
-### Vite-host acceptance criteria
-
-- [ ] Vite 8 development renders the Rsbuild remote into initial HTML.
-- [ ] Vite 8 production renders and hydrates the same remote.
-- [ ] Vite 7 production works, or the package documents a narrower requirement.
-- [ ] Remote CSS appears before or during hydration without a layout flash.
-- [ ] Manifest revalidation replaces a changed remote without restarting the
-      host process.
-
-## Phase 3: support an Rsbuild host with a Vite SSR remote
-
-- [ ] Confirm that Core's Node runtime selects `metaData.ssrRemoteEntry` instead
-      of the browser entry in a Vite manifest.
-- [ ] Confirm support for a manifest entry whose type is `module`.
-- [ ] Load Vite's transitive ESM chunks without Node network-import flags.
+- [ ] Confirm that Core's Node runtime selects `metaData.ssrRemoteEntry` with
+      type `module`.
+- [ ] Load Vite's transitive ESM chunks without Node network-import flags or
+      `--experimental-vm-modules`.
 - [ ] Map shared package imports to the Rsbuild host share scope.
-- [ ] Remove any dependency on `--experimental-vm-modules` from the supported
-      default path.
 - [ ] Verify development against Vite's `/__mf_ssr__/` and ModuleRunner
-      endpoints.
-- [ ] Verify production against the built `remoteEntry.ssr.js` graph.
+      endpoints, and production against the built `remoteEntry.ssr.js` graph.
 
-### Rsbuild-host acceptance criteria
+Acceptance: the Rsbuild host's initial HTML contains the Vite remote, hydration
+preserves it, and a remote outage returns a fallback instead of a 500.
 
-- [ ] The Rsbuild host's initial HTML contains Vite remote markup.
-- [ ] Hydration preserves that markup and remote state.
-- [ ] The Node runtime reports no missing module, VM import, or chunk execution
-      error.
-- [ ] A remote outage returns a controlled fallback instead of a 500 response.
+## Release work for each new SSR combination
 
-## Phase 4: shared identity and recovery hardening
-
-### Shared dependencies
-
-- [ ] Test React context created by the host and consumed by every remote.
-- [ ] Test `useState`, `useEffect`, Suspense, and error boundaries across the
-      federation boundary.
-- [ ] Test React 18 and React 19 if both remain in the support range.
-- [ ] Validate version mismatch warnings for incompatible React majors.
-- [ ] Ensure `import: false` fails at startup when the host cannot provide the
-      required package.
-
-### Remote lifecycle
-
-- [ ] Start the host while the remote is unavailable.
-- [ ] Bring the remote online and prove that a later request recovers.
-- [ ] Restart the remote with a new manifest and server entry.
-- [ ] Revalidate without serving a stale container or stale shared module.
-- [ ] Test concurrent first requests while the remote entry is loading.
-- [ ] Test cyclic imports in the server remote graph.
-
-### Error reporting
-
-- [ ] Preserve the original network or execution error.
-- [ ] Distinguish manifest failure, entry failure, chunk failure, and shared
-      dependency failure.
-- [ ] Add optional observability reports for raw runtime codes that do not
-      contain enough context.
-
-## Required test matrix
-
-| Host      | Remote    | Development  | Production | Initial remote HTML | Hydration and interaction |
-| --------- | --------- | ------------ | ---------- | ------------------- | ------------------------- |
-| Vite 8    | Vite 8    | Existing     | Add        | Existing            | Existing (development)    |
-| Vite 7    | Vite 7    | Not required | Add        | Add                 | Add                       |
-| Rsbuild 2 | Rsbuild 2 | Add          | Add        | Add                 | Add                       |
-| Vite 8    | Rsbuild 2 | Add          | Add        | Add                 | Add                       |
-| Rsbuild 2 | Vite 8    | Add          | Add        | Add                 | Add                       |
-
-Run the production matrix on every supported Node line:
-
-- [ ] Node 22.18
-- [ ] Node 24
-- [ ] Node 26
-
-Each matrix row must verify:
-
-- [ ] manifest and remote entry return 200;
-- [ ] every manifest-referenced asset returns 200;
-- [ ] initial HTML contains the expected remote marker;
-- [ ] hydration produces no console errors or mismatch warnings;
-- [ ] remote interaction updates state;
-- [ ] host and remote use one React dispatcher;
-- [ ] shutting down the remote produces the documented fallback;
-- [ ] restarting the remote allows recovery.
-
-## Documentation and release work
-
-- [ ] Update the root README only after a matrix row satisfies every acceptance
-      criterion.
-- [x] Document browser-only federation as the Rsbuild default and SSR as opt-in.
-- [ ] Document `dist/server/index.cjs` when the CommonJS Rsbuild server adapter
-      is enabled.
-- [ ] Document the chosen cross-bundler server-entry format.
-- [ ] Keep Vite 8 as the development SSR requirement unless Vite 7 gains an
-      equivalent ModuleRunner path.
-- [ ] Add a Changeset for any new supported SSR combination.
-- [ ] Include the tested bundler and Node version matrix in the release notes.
-
-## Definition of done
-
-SSR support for a host/remote combination is complete only when:
-
-- [ ] the remote is rendered into the host's initial HTML;
-- [ ] the same markup hydrates without replacement;
-- [ ] the remote remains interactive;
-- [ ] shared React identity is proven;
-- [ ] development and production both pass where claimed;
-- [ ] remote outage and recovery behavior are tested;
-- [ ] server entries and all chunks are deployable without local paths;
-- [ ] the supported versions are documented;
-- [ ] CI runs the proof on every supported Node line.
-
-Until then, keep the package description precise: Vite-to-Vite SSR is supported;
-Rsbuild and cross-bundler SSR are in progress.
-
-## Example and development gaps
-
-- [ ] Run the browser tests against production builds, not only development
-      servers.
-- [ ] A Vite remote with `exposes` does not hydrate when opened directly in
-      development: `@module-federation/vite` forces host-driven init for
-      exposing containers (`forceClientInjected`). 1.22 hangs; 1.23.2 throws
-      `_jsxDEV is not a function`. Report upstream, or add a standalone init
-      path.
-- [ ] Decide whether the Rsbuild adapter should default hosts to
-      `shareStrategy: "loaded-first"`. With `version-first`, one offline remote
-      fails host startup with `RUNTIME-003`; the example sets it explicitly.
+- [ ] Update the support table only after the combination passes the
+      development and production scenarios on every supported Node line.
+- [ ] Add a Changeset and list the tested bundler and Node versions in the
+      release notes.

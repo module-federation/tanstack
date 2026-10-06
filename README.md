@@ -57,9 +57,8 @@ Do not set a global Module Federation `target`. TanStack Start builds client
 and SSR environments from one Vite configuration, so the wrapper leaves target
 selection to `@module-federation/vite` for each environment.
 
-The package supports Node 22.18+, 24.11+, and 26+, plus Vite 7/8 and TanStack
-Start 1.167.43+. Use Vite 8 when developing SSR hosts that load remotes; Vite 7
-remains supported for production builds.
+The package supports Node 22.18+, 24.11+, and 26+, plus TanStack Start
+1.167.43+. It is tested with Vite 8, which development SSR hosts require.
 
 The package root remains a Vite compatibility export. New Vite projects can
 import `/vite` explicitly. Rsbuild projects must import `/rsbuild`:
@@ -86,28 +85,33 @@ export default defineConfig({
 ```
 
 The Rsbuild adapter emits script-compatible browser output, so its manifest can
-be consumed by Vite and Rsbuild hosts. It adds eager, singleton `react` and
-`react-dom` entries without changing the caller's config object. Hosts should
-use `shareStrategy: "loaded-first"` so one offline remote cannot fail startup.
+be consumed by Vite and Rsbuild hosts. It shares singleton `react` and
+`react-dom` (eager for hosts, lazy for remotes), enables async startup, and
+gives remotes `publicPath: "auto"` so other origins load their chunks from the
+remote. Hosts should use `shareStrategy: "loaded-first"` so one offline remote
+cannot fail startup.
 
-SSR federation for Rsbuild is experimental and opt-in: `server: true` adds an
-async-node CommonJS server container and changes the server entry to
-`dist/server/index.cjs`.
+SSR federation is opt-in with `server: true` on both sides. A remote builds a
+Node container into `dist/client/ssr/` and advertises it in its manifest; a host
+loads remotes on the server from an async-node CommonJS server build. See the
+[package README](packages/tanstack/README.md#ssr-federation).
 
 ## Support status
 
-| Host    | Remote  | Browser federation | Federated SSR                 |
-| ------- | ------- | ------------------ | ----------------------------- |
-| Vite    | Vite    | Supported          | Supported                     |
-| Vite    | Rsbuild | Supported          | Not supported                 |
-| Rsbuild | Vite    | Supported          | Not supported                 |
-| Rsbuild | Rsbuild | Supported          | Experimental (`server: true`) |
+| Host    | Remote  | Browser federation | Federated SSR              |
+| ------- | ------- | ------------------ | -------------------------- |
+| Vite    | Vite    | Supported          | Supported                  |
+| Vite    | Rsbuild | Supported          | Not supported              |
+| Rsbuild | Vite    | Supported          | Not supported              |
+| Rsbuild | Rsbuild | Supported          | Supported (`server: true`) |
 
-[`TODO.md`](TODO.md) tracks the remaining SSR work.
+Known limitations are listed in the
+[package README](packages/tanstack/README.md#known-limitations), and
+[`TODO.md`](TODO.md) tracks the remaining work.
 
 ## Examples
 
-The workspace has four TanStack Start apps; see [`apps/README.md`](apps/README.md).
+The workspace has six TanStack Start apps; see [`apps/README.md`](apps/README.md).
 
 The repository uses pnpm 12 (pinned in `packageManager`). pnpm 12 ships as a
 native binary, so an older global pnpm cannot switch to it automatically;
@@ -116,13 +120,16 @@ commands.
 
 ```bash
 pnpm install
-pnpm start
+pnpm start    # development servers
+pnpm preview  # production builds
 ```
 
-Open the Vite host at http://127.0.0.1:3000 or the Rsbuild host at
-http://127.0.0.1:3003. Each host renders a card from both remotes.
+Open the Vite host at http://127.0.0.1:3000, the Rsbuild host at
+http://127.0.0.1:3003, or the Rsbuild SSR host at http://127.0.0.1:3005.
 
-`pnpm test` builds everything, starts all four apps, and drives both hosts in
-headless Chromium. It checks hydration, remote interactivity, console errors,
-and the fallback when a remote is offline. Run
+`pnpm test` builds everything, then runs the six apps twice, as development
+servers and as production builds, and drives every host in headless Chromium.
+It checks server-rendered remote markup (including concurrent first requests),
+hydration, remote interactivity, console errors, manifest asset reachability,
+and the fallback and recovery when remotes go offline. Run
 `pnpm exec playwright install chromium` once before the first local test run.
