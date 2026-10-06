@@ -13,6 +13,8 @@ test("published declarations reference included source maps", () => {
   for (const declarationName of [
     "index.d.cts",
     "index.d.ts",
+    "node-entry-loader.d.cts",
+    "node-entry-loader.d.ts",
     "rsbuild.d.cts",
     "rsbuild.d.ts",
     "vite.d.cts",
@@ -39,19 +41,21 @@ test("npm package contains only runtime, metadata, and documentation files", () 
   const [manifest] = JSON.parse(packed.stdout);
   const files = manifest.files.map(({ path }) => path).sort();
 
-  const runtimeFiles = ["index", "rsbuild", "shared", "vite"].flatMap((entry) => {
-    const sourceMaps = entry === "index" ? [] : [`dist/${entry}.js.map`];
-    return [
-      `dist/${entry}.cjs`,
-      `dist/${entry}.cjs.map`,
-      `dist/${entry}.d.cts`,
-      `dist/${entry}.d.cts.map`,
-      `dist/${entry}.d.ts`,
-      `dist/${entry}.d.ts.map`,
-      `dist/${entry}.js`,
-      ...sourceMaps,
-    ];
-  });
+  const runtimeFiles = ["index", "node-entry-loader", "rsbuild", "shared", "vite"].flatMap(
+    (entry) => {
+      const sourceMaps = entry === "index" ? [] : [`dist/${entry}.js.map`];
+      return [
+        `dist/${entry}.cjs`,
+        `dist/${entry}.cjs.map`,
+        `dist/${entry}.d.cts`,
+        `dist/${entry}.d.cts.map`,
+        `dist/${entry}.d.ts`,
+        `dist/${entry}.d.ts.map`,
+        `dist/${entry}.js`,
+        ...sourceMaps,
+      ];
+    },
+  );
 
   assert.deepEqual(
     files,

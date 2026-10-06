@@ -2,10 +2,26 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "files": [],
   "references": [
-    { "path": "./packages/tanstack/tsconfig.json" },
-    { "path": "./apps/vite-host/tsconfig.json" },
-    { "path": "./apps/vite-remote/tsconfig.json" },
-    { "path": "./apps/rsbuild-host/tsconfig.json" },
-    { "path": "./apps/rsbuild-remote/tsconfig.json" }
+    {
+      "path": "./packages/tanstack/tsconfig.json"
+    },
+    {
+      "path": "./apps/vite-host/tsconfig.json"
+    },
+    {
+      "path": "./apps/vite-remote/tsconfig.json"
+    },
+    {
+      "path": "./apps/rsbuild-host/tsconfig.json"
+    },
+    {
+      "path": "./apps/rsbuild-remote/tsconfig.json"
+    },
+    {
+      "path": "./apps/rsbuild-ssr-host/tsconfig.json"
+    },
+    {
+      "path": "./apps/rsbuild-ssr-remote/tsconfig.json"
+    }
   ]
 }

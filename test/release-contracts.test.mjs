@@ -119,7 +119,7 @@ test("leaves the build target to each TanStack environment", () => {
   assert.equal(options.target, undefined);
 });
 
-test("Rsbuild defaults make synchronous React shares eager without mutating overrides", () => {
+test("Rsbuild shared defaults never mutate caller overrides", () => {
   const callerShared = { react: { eager: false, singleton: false } };
   const before = structuredClone(callerShared);
   const shared = resolveShared(callerShared, eagerShared);
@@ -129,12 +129,116 @@ test("Rsbuild defaults make synchronous React shares eager without mutating over
   assert.deepEqual(shared["react-dom"], { eager: true, singleton: true });
 });
 
-test("Rsbuild opt-in SSR configures separate browser and async-node environments", () => {
-  const plugins = tanstackStartRsbuildModuleFederation({
-    federation: { name: "test_remote" },
+const rsbuildRemote = { name: "test_remote", exposes: { "./Card": "./src/Card.tsx" } };
+const rsbuildHost = {
+  name: "test_host",
+  remotes: { remote: "remote@http://remote/mf-manifest.json" },
+};
+
+test("Rsbuild hosts share eager React; remotes and server containers stay lazy", () => {
+  const [hostClient, hostServer] = federationOptions({ federation: rsbuildHost, server: true });
+  const [remoteClient, remoteContainer] = federationOptions({
+    federation: rsbuildRemote,
     server: true,
   });
 
+  for (const options of [hostClient, hostServer]) {
+    assert.deepEqual(options.shared.react, { eager: true, singleton: true });
+    assert.deepEqual(options.shared["react-dom"], { eager: true, singleton: true });
+  }
+  for (const options of [remoteClient, remoteContainer]) {
+    assert.deepEqual(options.shared.react, { singleton: true });
+    assert.deepEqual(options.shared["react-dom"], { singleton: true });
+  }
+});
+
+test("Rsbuild enables async startup unless the caller disables it", () => {
+  const [enabled] = federationOptions({ federation: rsbuildRemote });
+  assert.equal(enabled.experiments.asyncStartup, true);
+
+  const [disabled] = federationOptions({
+    federation: { ...rsbuildRemote, experiments: { asyncStartup: false } },
+  });
+  assert.equal(disabled.experiments.asyncStartup, false);
+});
+
+test("Rsbuild federation is browser-only by default", () => {
+  for (const federation of [rsbuildRemote, rsbuildHost]) {
+    assert.deepEqual(
+      tanstackStartRsbuildModuleFederation({ federation }).map(({ name }) => name),
+      ["rsbuild:module-federation-enhanced", "tanstack-start-federation-client-compat"],
+    );
+  }
+});
+
+test("Rsbuild remotes resolve browser chunks from their own origin", () => {
+  const remoteClient = { name: "client", output: { publicPath: "/" } };
+  runHooks(clientCompat(rsbuildRemote)).onBeforeCreateCompiler({ bundlerConfigs: [remoteClient] });
+  assert.equal(remoteClient.output.publicPath, "auto");
+
+  const cdnClient = { name: "client", output: { publicPath: "https://cdn.example/remote/" } };
+  runHooks(clientCompat(rsbuildRemote)).onBeforeCreateCompiler({ bundlerConfigs: [cdnClient] });
+  assert.equal(cdnClient.output.publicPath, "https://cdn.example/remote/");
+
+  const hostClient = { name: "client", output: { publicPath: "/" } };
+  runHooks(clientCompat(rsbuildHost)).onBeforeCreateCompiler({ bundlerConfigs: [hostClient] });
+  assert.deepEqual(hostClient.output, {
+    chunkFormat: "array-push",
+    chunkLoading: "jsonp",
+    chunkLoadingGlobal: "chunk_test_host",
+    module: false,
+    publicPath: "/",
+    uniqueName: "test_host",
+  });
+});
+
+test("Rsbuild SSR remotes ship a Node container with the browser assets", async () => {
+  const plugins = tanstackStartRsbuildModuleFederation({ federation: rsbuildRemote, server: true });
+  assert.deepEqual(
+    plugins.map(({ name }) => name),
+    [
+      "rsbuild:module-federation-enhanced",
+      "tanstack-start-federation-client-compat",
+      "tanstack-start-federation-server-container",
+      "rsbuild:module-federation-enhanced",
+    ],
+  );
+
+  const hooks = runHooks(
+    plugins.find(({ name }) => name === "tanstack-start-federation-server-container"),
+  );
+  const rsbuildConfig = { environments: { client: {}, ssr: {} } };
+  assert.equal(hooks.modifyRsbuildConfig.order, "pre");
+  hooks.modifyRsbuildConfig.handler(rsbuildConfig);
+  assert.deepEqual(rsbuildConfig.environments["mf-server"].output, {
+    emitAssets: true,
+    target: "node",
+  });
+
+  for (const [publicPath, expected] of [
+    ["http://127.0.0.1:3004/", "http://127.0.0.1:3004/ssr/"],
+    ["auto", "auto"],
+  ]) {
+    const client = { name: "client", output: { path: "/app/dist/client", publicPath } };
+    const container = { name: "mf-server", output: {} };
+    hooks.onBeforeCreateCompiler({ bundlerConfigs: [client, container] });
+    assert.equal(container.output.path, join("/app/dist/client", "ssr"));
+    assert.equal(container.output.publicPath, expected);
+  }
+
+  const [client, container] = federationOptions({ federation: rsbuildRemote, server: true });
+  assert.equal(container.filename, "remoteEntry.js");
+  assert.equal(container.remotes, undefined);
+  const stats = await client.manifest.additionalData({ stats: { metaData: {} } });
+  assert.deepEqual(stats.metaData.ssrRemoteEntry, {
+    name: "remoteEntry.js",
+    path: "ssr",
+    type: "commonjs-module",
+  });
+});
+
+test("Rsbuild SSR hosts load remotes from an async-node CommonJS server", () => {
+  const plugins = tanstackStartRsbuildModuleFederation({ federation: rsbuildHost, server: true });
   assert.deepEqual(
     plugins.map(({ name }) => name),
     [
@@ -145,30 +249,19 @@ test("Rsbuild opt-in SSR configures separate browser and async-node environments
     ],
   );
 
-  const clientConfig = { name: "client", output: {} };
-  const serverConfig = {
-    name: "ssr",
-    output: { chunkLoadingGlobal: "stale" },
-  };
-  applyCompilerHook(
-    plugins.find(({ name }) => name === "tanstack-start-federation-client-compat"),
-    [clientConfig, serverConfig],
-  );
-  applyCompilerHook(
-    plugins.find(({ name }) => name === "tanstack-start-federation-ssr-compat"),
-    [clientConfig, serverConfig],
-  );
+  const [, server] = federationOptions({ federation: rsbuildHost, server: true });
+  assert.equal(server.manifest, false);
+  assert.equal(server.exposes, undefined);
+  assert.ok(server.runtimePlugins.includes("@module-federation/tanstack/node-entry-loader"));
 
-  assert.deepEqual(clientConfig.output, {
-    chunkFormat: "array-push",
-    chunkLoading: "jsonp",
-    chunkLoadingGlobal: "chunk_test_remote",
-    module: false,
-    uniqueName: "test_remote",
-  });
+  const hooks = runHooks(
+    plugins.find(({ name }) => name === "tanstack-start-federation-ssr-compat"),
+  );
+  const serverConfig = { name: "ssr", output: { chunkLoadingGlobal: "stale" } };
+  hooks.onBeforeCreateCompiler({ bundlerConfigs: [{ name: "client", output: {} }, serverConfig] });
   assert.equal(serverConfig.target, "async-node");
   assert.deepEqual(serverConfig.output, {
-    chunkFilename: "[id].test_remote.cjs",
+    chunkFilename: "[id].test_host.cjs",
     chunkFormat: "commonjs",
     chunkLoading: "async-node",
     filename: "[name].cjs",
@@ -176,41 +269,86 @@ test("Rsbuild opt-in SSR configures separate browser and async-node environments
     module: false,
   });
 
-  assert.equal(
-    tanstackStartRsbuildModuleFederation({
-      federation: { name: "browser_only" },
-    }).length,
-    2,
-    "SSR federation is opt-in",
-  );
+  const environmentConfig = { dev: {} };
+  hooks.modifyEnvironmentConfig(environmentConfig, { name: "ssr" });
+  assert.equal(environmentConfig.dev.writeToDisk, true, "async-node chunks are read from disk");
 
-  const esmPlugins = tanstackStartRsbuildModuleFederation({
-    federation: { name: "esm_server" },
-    server: { forceCommonJsOutput: false },
-  });
-  const esmServerConfig = {
-    name: "ssr",
-    output: { chunkFilename: "[id].js", filename: "[name].js" },
-  };
-  applyCompilerHook(
-    esmPlugins.find(({ name }) => name === "tanstack-start-federation-ssr-compat"),
-    [esmServerConfig],
-  );
-  assert.deepEqual(esmServerConfig, {
-    name: "ssr",
-    output: { chunkFilename: "[id].js", filename: "[name].js" },
-  });
-});
-
-function applyCompilerHook(plugin, bundlerConfigs) {
-  let hook;
-  plugin.setup({
-    onBeforeCreateCompiler(callback) {
-      hook = callback;
+  const emitted = {};
+  hooks.processAssets.handler({
+    assets: { "index.cjs": {} },
+    compilation: { emitAsset: (name, source) => (emitted[name] = source.source()) },
+    sources: {
+      RawSource: class {
+        constructor(value) {
+          this.value = value;
+        }
+        source() {
+          return this.value;
+        }
+      },
     },
   });
-  assert.ok(hook, `${plugin.name} registers a compiler hook`);
-  hook({ bundlerConfigs });
+  assert.deepEqual(hooks.processAssets.options, { stage: "additional", environments: ["ssr"] });
+  assert.match(emitted["index.js"], /await createRequire\(import\.meta\.url\)\("\.\/index\.cjs"\)/);
+});
+
+test("Rsbuild ESM server output is left to TanStack Start", () => {
+  const plugins = tanstackStartRsbuildModuleFederation({
+    federation: rsbuildHost,
+    server: { forceCommonJsOutput: false },
+  });
+  const hooks = runHooks(
+    plugins.find(({ name }) => name === "tanstack-start-federation-ssr-compat"),
+  );
+  const serverConfig = { name: "ssr", output: { chunkFilename: "[id].js", filename: "[name].js" } };
+  hooks.onBeforeCreateCompiler({ bundlerConfigs: [serverConfig] });
+  assert.deepEqual(serverConfig, {
+    name: "ssr",
+    output: { chunkFilename: "[id].js", filename: "[name].js" },
+  });
+  assert.equal(hooks.processAssets, undefined);
+  assert.equal(hooks.modifyEnvironmentConfig, undefined);
+});
+
+function clientCompat(federation) {
+  return tanstackStartRsbuildModuleFederation({ federation }).find(
+    ({ name }) => name === "tanstack-start-federation-client-compat",
+  );
+}
+
+/** Returns the Module Federation options each enhanced plugin receives, in plugin order. */
+function federationOptions(options) {
+  return tanstackStartRsbuildModuleFederation(options)
+    .filter(({ name }) => name === "rsbuild:module-federation-enhanced")
+    .map((plugin) => {
+      let exposed;
+      plugin.setup(
+        new Proxy(
+          {},
+          {
+            get(_, key) {
+              if (key === "context") return { callerName: "rsbuild" };
+              if (key === "expose") return (_name, api) => (exposed = api);
+              if (key === "getRsbuildConfig") return () => ({});
+              return () => {};
+            },
+          },
+        ),
+      );
+      return exposed.getOptions();
+    });
+}
+
+/** Runs a plugin's setup against a recording API and returns the hooks it registered. */
+function runHooks(plugin) {
+  const hooks = {};
+  plugin.setup({
+    modifyEnvironmentConfig: (handler) => (hooks.modifyEnvironmentConfig = handler),
+    modifyRsbuildConfig: (hook) => (hooks.modifyRsbuildConfig = hook),
+    onBeforeCreateCompiler: (handler) => (hooks.onBeforeCreateCompiler = handler),
+    processAssets: (options, handler) => (hooks.processAssets = { handler, options }),
+  });
+  return hooks;
 }
 
 test("published metadata selects ESM and CommonJS builds with matching types", () => {

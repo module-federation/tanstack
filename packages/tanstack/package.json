@@ -39,6 +39,16 @@
         "default": "./dist/rsbuild.cjs"
       }
     },
+    "./node-entry-loader": {
+      "import": {
+        "types": "./dist/node-entry-loader.d.ts",
+        "default": "./dist/node-entry-loader.js"
+      },
+      "require": {
+        "types": "./dist/node-entry-loader.d.cts",
+        "default": "./dist/node-entry-loader.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -103,6 +113,7 @@
   },
   "devDependencies": {
     "@module-federation/rsbuild-plugin": "2.9.2",
+    "@module-federation/runtime": "2.9.2",
     "@module-federation/vite": "1.23.2",
     "@rsbuild/core": "2.2.11",
     "@rslib/core": "1.0.3",

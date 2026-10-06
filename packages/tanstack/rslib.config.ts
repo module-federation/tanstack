@@ -2,6 +2,7 @@ import { defineConfig } from "@rslib/core";
 
 const entry = {
   index: "./src/index.ts",
+  "node-entry-loader": "./src/node-entry-loader.ts",
   rsbuild: "./src/rsbuild.ts",
   shared: "./src/shared.ts",
   vite: "./src/vite.ts",
