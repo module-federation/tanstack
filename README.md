@@ -98,9 +98,12 @@ loads remotes on the server from an async-node CommonJS server build, and
 renders Vite remotes too when `@module-federation/vite` is installed. See the
 [package README](packages/tanstack/README.md#ssr-federation).
 
-`@module-federation/tanstack/runtime` exports `getRemoteStylesheets`, which
-reads a remote's stylesheets from its manifest so a route can put them in the
-server response's `<head>`.
+`@module-federation/tanstack/runtime` has two helpers for route code:
+`lazyRemote`, a `React.lazy` that loads a failed remote again instead of
+failing until the server restarts, and `getRemoteStylesheets`, which reads a
+remote's stylesheets from its manifest so a route can put them in the server
+response's `<head>`. See
+[rendering remotes on the server](packages/tanstack/README.md#rendering-remotes-on-the-server).
 
 ## Support status
 
