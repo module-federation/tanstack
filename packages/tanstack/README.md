@@ -66,7 +66,10 @@ The wrapper omits the global Module Federation `target` option. TanStack
 Start's client and SSR environments need `@module-federation/vite` to select
 `web` and `node` independently.
 
-Vite 8 is required for SSR remote loading during development.
+Federated SSR requires Vite 8. With Vite 7 (and `@vitejs/plugin-react` 5),
+browser federation works, but production SSR hosts fail to load remotes
+(`ERR_UNSUPPORTED_ESM_URL_SCHEME` for a `virtual:` import) and fall back to
+client rendering. CI tests Vite 8 only.
 
 ## Rsbuild
 

@@ -103,9 +103,14 @@ limitations.
 
 ### Versions
 
-- [ ] Vite 7: `@vitejs/plugin-react` 6 requires Vite 8, so a Vite 7 run needs
-      its own dependency set (`@vitejs/plugin-react` 5). Until then the docs
-      claim Vite 8 only, while the peer range still allows Vite 7.
+- [x] Vite 7 checked by hand with `@vitejs/plugin-react` 5.2 and Vite 7.3.7:
+      browser federation works (hydration, interaction, host context).
+- [ ] Vite 7 production SSR: the host's server bundle keeps a `virtual:` import
+      that Node rejects (`ERR_UNSUPPORTED_ESM_URL_SCHEME`), so the remote falls
+      back to client rendering. Report to `@module-federation/vite`; until then
+      the docs require Vite 8 for federated SSR.
+- [ ] Add a CI job with Vite 7 dependencies once the SSR path works, or narrow
+      the `vite` peer range.
 
 ### Error reporting
 

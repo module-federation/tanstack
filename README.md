@@ -58,7 +58,7 @@ and SSR environments from one Vite configuration, so the wrapper leaves target
 selection to `@module-federation/vite` for each environment.
 
 The package supports Node 22.18+, 24.11+, and 26+, plus TanStack Start
-1.167.43+. It is tested with Vite 8, which development SSR hosts require.
+1.167.43+. It is tested with Vite 8, which federated SSR requires; Vite 7 supports browser federation only.
 
 The package root remains a Vite compatibility export. New Vite projects can
 import `/vite` explicitly. Rsbuild projects must import `/rsbuild`:
