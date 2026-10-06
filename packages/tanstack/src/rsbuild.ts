@@ -42,7 +42,8 @@ export type TanStackStartRsbuildModuleFederationOptions = {
 // resolve its chunks from either the container URL (Module Federation's Node runtime) or
 // the manifest URL (`@module-federation/vite`), so both must share a directory. The
 // `.cjs` extension matters: `@module-federation/vite` treats any `.ssr.js` URL as an ES
-// module, while for other names it reads the format from the manifest.
+// module, while for other names it reads the format from the manifest
+// (module-federation/vite#1423).
 const SERVER_CONTAINER_FILENAME = "remoteEntry.ssr.cjs";
 const SERVER_CHUNK_DIR = "ssr";
 const SERVER_CONTAINER_ENVIRONMENT = "mf-server";

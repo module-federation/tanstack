@@ -110,31 +110,42 @@ the remotes once they return.
 
 ### Upstream issues
 
-Report these to `module-federation/vite` (the first three are worked around
-here) and `module-federation/core`.
+Reported to `module-federation/vite`; the adapters work around each one until a
+release ships the fix. Remove the workaround when it does.
 
-- [ ] `@module-federation/vite`: `__mf_remote_pending` is exported but never
-      awaited, so a remote outage becomes an unhandled rejection in a dev
-      server. Worked around by `remotePendingPlugin`.
-- [ ] `@module-federation/vite`: `getSSREntry` returns `type: "module"` for any
-      `.ssr.js` URL, ignoring the remote's declared format. Worked around with
-      the `.cjs` container name.
-- [ ] `@module-federation/vite`: in development, the SSR loader imports saved
-      remote entries through Vite's module runner. Worked around by
-      `nativeTempModuleImportPlugin`.
-- [ ] `@module-federation/vite`: a server wrapper makes one load attempt, so a
-      remote that fails its first load fails for the life of the process. In
-      development, the wrapper's `then` export also makes Vite's module runner
-      cache the rejection. Worked around by `remotePendingPlugin`. Browser
-      wrappers make one attempt too, which a page reload clears.
+- [ ] An unawaited `__mf_remote_pending` turns a remote outage into an
+      unhandled rejection that exits a dev server.
+      [vite#1421](https://github.com/module-federation/vite/pull/1421) (PR).
+      Worked around by `remotePendingPlugin`.
+- [ ] A server wrapper makes one load attempt, so a remote that fails its
+      first load fails for the life of the process; in development, Vite's
+      module runner also caches the wrapper's rejected `then` export.
+      [vite#1424](https://github.com/module-federation/vite/issues/1424).
+      Worked around by `remotePendingPlugin`. Browser wrappers make one
+      attempt too, which a page reload clears.
+- [ ] The SSR loader cannot load a CommonJS server container from a manifest:
+      it treats any `.ssr.js` URL as an ES module, joins `path` and `name`
+      without a separator, returns the CommonJS namespace instead of
+      `namespace.default`, and in development imports the saved entry through
+      Vite's module runner.
+      [vite#1423](https://github.com/module-federation/vite/issues/1423).
+      Worked around by the root-level `remoteEntry.ssr.cjs` container with
+      named-export re-assignments, and by `nativeTempModuleImportPlugin`.
+- [ ] Rollup builds (Vite 5 to 7) keep an unresolved
+      `virtual:mf-exposes-ssr:` import in the SSR entry outside Nuxt.
+      [vite#1422](https://github.com/module-federation/vite/pull/1422) (PR).
+      Not worked around: this package requires Vite 8.
+- [ ] A Vite remote with `exposes` does not hydrate when opened directly in
+      development (`forceClientInjected`), and since 1.23.0 not in production
+      either (`x is not a function` from the `react-dom/client` share; 1.22.0
+      and 1.22.1 work). Fixed on `main` (#1413, #1415, #1420); update when a
+      release ships.
+
+Still to report to `module-federation/core`:
+
 - [ ] `@module-federation/webpack-bundler-runtime`: a remote module that
       failed stays in the module cache with empty exports, although the load
       itself is retried. Worked around by `remoteRetryPlugin`.
-- [ ] `@module-federation/vite`: a Vite remote with `exposes` does not hydrate
-      when opened directly in development (`forceClientInjected`), and since
-      1.23.0 not in production either (`x is not a function` from the
-      `react-dom/client` share; 1.22.0 and 1.22.1 work). Fixed on `main`
-      (#1413, #1415, #1420); update when a release ships.
 - [ ] `@module-federation/node`: a container without an absolute public path
       logs `Backup remote entry found` for every chunk it loads through a Vite
       host.

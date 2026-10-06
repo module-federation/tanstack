@@ -91,6 +91,8 @@ export function then(onFulfilled, onRejected) {
  * - A wrapper re-evaluated after its remote was cached exports a fresh load that nothing
  *   awaits, so a remote outage becomes an unhandled rejection that exits the Vite dev
  *   server. Awaiting the export still rejects. Wrappers that handle it are left alone.
+ *
+ * Reported as module-federation/vite#1424 and fixed for the rejection in #1421.
  */
 export function remotePendingPlugin(): Plugin {
   return {
@@ -126,6 +128,7 @@ const TEMP_MODULE_IMPORT =
  * import goes through Vite's module runner, which evaluates every file as an ES module.
  * CommonJS entries, such as Rsbuild server containers, then fail with "module is not
  * defined". Importing through Node lets it choose the format, as production builds do.
+ * Reported as module-federation/vite#1423.
  */
 export function nativeTempModuleImportPlugin(): Plugin {
   return {
