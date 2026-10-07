@@ -1,0 +1,27 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".output/**", "dist/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "start": {
+      "cache": false,
+      "persistent": true
+    },
+    "typecheck": {
+      "dependsOn": ["^build", "^typecheck"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": []
+    },
+    "preview": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

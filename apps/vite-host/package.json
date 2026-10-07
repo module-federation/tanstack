@@ -1,0 +1,30 @@
+{
+  "name": "tanstack-start-vite-host",
+  "private": true,
+  "sideEffects": false,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite dev --port 3000 --strictPort",
+    "start": "vite --host 127.0.0.1 --port 3000 --strictPort",
+    "preview": "vite preview --host 127.0.0.1 --port 3000 --strictPort",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@module-federation/runtime": "2.9.2",
+    "@tanstack/react-router": "1.170.41",
+    "@tanstack/react-start": "1.168.60",
+    "example-host-context": "workspace:*",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@module-federation/tanstack": "workspace:*",
+    "@types/node": "26.6.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "typescript": "7.0.2",
+    "vite": "8.3.2"
+  }
+}

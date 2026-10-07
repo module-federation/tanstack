@@ -1,0 +1,99 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        type: choice
+        required: true
+        default: next
+        options: [latest, next]
+      branch:
+        required: true
+        default: main
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-module-federation-tanstack
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: Publish
+    steps:
+      - name: Validate manual target
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_BRANCH: ${{ inputs.branch }}
+        run: test "$RELEASE_BRANCH" = "main" || { echo "Releases are main-only."; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.release.tag_name || inputs.branch }}
+      - name: Verify source branch
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor HEAD origin/main || { echo "Source is not on main."; exit 1; }
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+      - run: pnpm install --frozen-lockfile
+      - name: Verify release tag
+        if: github.event_name == 'release'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          test "${RELEASE_TAG#v}" = "$RELEASE_TAG" || { echo "Tags must not start with v."; exit 1; }
+          test "$(node -p "require('./packages/tanstack/package.json').version")" = "$RELEASE_TAG" || { echo "Tag/version mismatch."; exit 1; }
+      - name: Generate preview version
+        if: github.event_name == 'workflow_dispatch' && inputs.version == 'next'
+        run: |
+          pnpm changeset version --snapshot next
+          SNAPSHOT_VERSION="$(node -p "require('./packages/tanstack/package.json').version")"
+          BASE_VERSION="${SNAPSHOT_VERSION%%-*}"
+          npm pkg set version="${BASE_VERSION}-next.${GITHUB_RUN_ID}" --prefix packages/tanstack
+      - run: pnpm format:check
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test
+      - run: pnpm pack:tanstack
+      - name: Compute dist-tag
+        id: dist
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          PRERELEASE: ${{ github.event.release.prerelease || false }}
+        run: |
+          TAG=latest
+          if [ "$INPUT_VERSION" = "next" ] || [ "$PRERELEASE" = "true" ]; then TAG=next; fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: Refuse conflicting republish
+        id: publish-check
+        env:
+          PACKAGE: "@module-federation/tanstack"
+          DIST_TAG: ${{ steps.dist.outputs.tag }}
+        run: |
+          VERSION="$(node -p "require('./packages/tanstack/package.json').version")"
+          EXISTING="$(npm view "$PACKAGE@$VERSION" version --json 2>/dev/null || true)"
+          EXISTING="${EXISTING#\"}"; EXISTING="${EXISTING%\"}"
+          if [ "$EXISTING" = "$VERSION" ]; then
+            CURRENT="$(npm view "$PACKAGE" "dist-tags.$DIST_TAG" --json 2>/dev/null || true)"
+            CURRENT="${CURRENT#\"}"; CURRENT="${CURRENT%\"}"
+            test "$CURRENT" = "$VERSION" || { echo "Existing version has conflicting dist-tag."; exit 1; }
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish to npm
+        if: steps.publish-check.outputs.publish == 'true'
+        working-directory: packages/tanstack
+        run: npm publish --provenance --tag "${{ steps.dist.outputs.tag }}" --access public

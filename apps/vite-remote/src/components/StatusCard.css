@@ -1,0 +1,77 @@
+.remote-card {
+  position: relative;
+  min-height: 300px;
+  border: 1px solid #7b4d26;
+  background: #241b14;
+  color: #e9efe9;
+  padding: 30px;
+  box-shadow: 14px 14px 0 #0a0d0b;
+  font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+}
+
+.remote-card .card-index,
+.remote-card .card-label,
+.remote-card .remote-status,
+.remote-card button {
+  font-family: "SFMono-Regular", Consolas, monospace;
+}
+
+.remote-card .card-index,
+.remote-card .card-label,
+.remote-card .remote-status {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.remote-card .card-index {
+  position: absolute;
+  top: 24px;
+  right: 26px;
+  color: #8f6d4e;
+  font-size: 0.72rem;
+}
+
+.remote-card .card-label {
+  margin: 0 0 58px;
+  color: #f4a95f;
+  font-size: 0.75rem;
+}
+
+.remote-card .remote-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #c4cfca;
+  font-size: 0.66rem;
+}
+
+.remote-card .status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8fffb8;
+  box-shadow: 0 0 10px rgba(143, 255, 184, 0.72);
+}
+
+.remote-card h2 {
+  margin: 22px 0 12px;
+  font-size: 1.8rem;
+}
+
+.remote-card > p:not(.card-label) {
+  color: #aeb9b1;
+  line-height: 1.65;
+}
+
+.remote-card button {
+  margin-top: 24px;
+  border: 0;
+  background: #f4a95f;
+  color: #17120e;
+  cursor: pointer;
+  padding: 12px 16px;
+}
+
+.remote-card button:hover {
+  background: #ffc27f;
+}

@@ -1,0 +1,45 @@
+import { tanstackStartModuleFederation } from "@module-federation/tanstack";
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  plugins: [
+    tanstackStartModuleFederation({
+      name: "tanstack_vite_host",
+      dts: false,
+      shared: {
+        // The root route renders the provider synchronously, so a Vite host must provide
+        // the package eagerly. "workspace:*" is not a semver range, hence requiredVersion.
+        "example-host-context": { eager: true, requiredVersion: "*", singleton: true },
+      },
+      remotes: {
+        tanstack_vite_remote: {
+          type: "module",
+          name: "tanstack_vite_remote",
+          entry: "http://127.0.0.1:3001/remoteEntry.js",
+        },
+        tanstack_rsbuild_remote: {
+          type: "global",
+          name: "tanstack_rsbuild_remote",
+          entry: "http://127.0.0.1:3002/mf-manifest.json",
+        },
+        tanstack_rsbuild_ssr_remote: {
+          type: "global",
+          name: "tanstack_rsbuild_ssr_remote",
+          entry: "http://127.0.0.1:3004/mf-manifest.json",
+        },
+      },
+    }),
+    tanstackStart(),
+    react(),
+  ],
+  server: {
+    port: 3000,
+  },
+  ssr: {
+    optimizeDeps: {
+      include: ["react", "react-dom"],
+    },
+  },
+});

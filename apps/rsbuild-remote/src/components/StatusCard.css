@@ -1,0 +1,23 @@
+.rsbuild-card {
+  border: 1px solid #83502a;
+  background: #291c13;
+  color: #fff3e8;
+  padding: 30px;
+}
+
+.rsbuild-card .eyebrow {
+  color: #ffbc7c;
+  font-family: monospace;
+  text-transform: uppercase;
+}
+
+.rsbuild-card h2 {
+  font-size: 2rem;
+}
+
+.rsbuild-card button {
+  background: #ffbc7c;
+  border: 0;
+  cursor: pointer;
+  padding: 12px;
+}

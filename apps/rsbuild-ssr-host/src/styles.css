@@ -1,0 +1,32 @@
+:root {
+  background: #111;
+  color: #edf6ef;
+  font-family: system-ui, sans-serif;
+}
+body {
+  margin: 0;
+}
+.page-shell {
+  width: min(760px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 80px 0;
+}
+.eyebrow {
+  color: #91f1b0;
+  font-family: monospace;
+  text-transform: uppercase;
+}
+h1 {
+  font-size: clamp(3rem, 10vw, 6rem);
+  margin: 12px 0;
+}
+.remote-loading {
+  border: 1px solid #4b6653;
+  margin-top: 36px;
+  padding: 30px;
+}
+.remote-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
