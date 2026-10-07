@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import {
   pluginModuleFederation,
   type ModuleFederationOptions,
@@ -41,9 +42,7 @@ export type TanStackStartRsbuildModuleFederationOptions = {
 // The server container sits next to the manifest, like a Vite remote's SSR entry. Hosts
 // resolve its chunks from either the container URL (Module Federation's Node runtime) or
 // the manifest URL (`@module-federation/vite`), so both must share a directory. The
-// `.cjs` extension matters: `@module-federation/vite` treats any `.ssr.js` URL as an ES
-// module, while for other names it reads the format from the manifest
-// (module-federation/vite#1423).
+// extension says the container is CommonJS.
 const SERVER_CONTAINER_FILENAME = "remoteEntry.ssr.cjs";
 const SERVER_CHUNK_DIR = "ssr";
 const SERVER_CONTAINER_ENVIRONMENT = "mf-server";
@@ -245,28 +244,9 @@ function serverContainerEnvironmentPlugin({
         containerConfig.output.publicPath =
           typeof publicPath === "string" && publicPath !== "auto" ? publicPath : "auto";
       });
-
-      // The container assigns `module.exports` at runtime, so ES module importers see only
-      // a default export. Static re-assignments make `init` and `get` detectable named
-      // exports, which `@module-federation/vite` hosts read when they import the container.
-      api.processAssets(
-        { stage: "summarize", environments: [SERVER_CONTAINER_ENVIRONMENT] },
-        ({ assets, compilation, sources }) => {
-          if (!assets[SERVER_CONTAINER_FILENAME]) return;
-          compilation.updateAsset(
-            SERVER_CONTAINER_FILENAME,
-            (source) => new sources.ConcatSource(source, CONTAINER_NAMED_EXPORTS),
-          );
-        },
-      );
     },
   };
 }
-
-const CONTAINER_NAMED_EXPORTS = `
-module.exports.init = module.exports.init;
-module.exports.get = module.exports.get;
-`;
 
 const REMOTE_FAILURE_FACTORY = /(webpackRequire\.m\[id\]\s*=\s*\(\)\s*=>\s*\{)(\s*throw error;)/;
 
@@ -379,10 +359,21 @@ function serverCompatibilityPlugin({
       if (!forceCommonJsOutput) return;
 
       // async-node chunk loading reads chunks from disk, while the dev server runs the entry
-      // from memory. Writing the server output keeps both from the same compilation.
+      // from memory. Writing the server output keeps both from the same compilation. The
+      // dev output goes to a cache directory: in `dist/server` it would replace a production
+      // build that `rsbuild preview` serves, and dev chunks share its chunk names.
       api.modifyEnvironmentConfig((config, { name }) => {
         if (name !== environment) return;
         config.dev.writeToDisk = true;
+        if (api.context.action === "dev") {
+          config.output.distPath.root = join(
+            api.context.rootPath,
+            "node_modules",
+            ".cache",
+            "tanstack-start-federation",
+            environment,
+          );
+        }
       });
 
       // TanStack Start's preview server, and deployments built against it, import

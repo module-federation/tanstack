@@ -14,6 +14,8 @@ Initial release: Module Federation for TanStack Start on Vite and Rsbuild.
   `@module-federation/rsbuild-plugin` with script-compatible browser output,
   async startup, role-aware React sharing, and `publicPath: "auto"` for
   remotes, so production remotes load from their own origin.
+- Requires `@module-federation/vite` 1.23.3, which fixes federated SSR of
+  CommonJS server containers and retries failed server-side remote loads.
 - Rsbuild SSR federation with `server: true`: remotes ship a Node container,
   `remoteEntry.ssr.cjs`, with their browser assets and advertise it in their
   manifest; hosts load remotes on the server from an async-node CommonJS build
@@ -29,6 +31,6 @@ Initial release: Module Federation for TanStack Start on Vite and Rsbuild.
   `getRemoteStylesheets`, which reads a remote's stylesheets from its manifest
   so server-rendered remote markup is styled before JavaScript loads.
 - Hosts that hit a remote outage, including at startup, render the remote again
-  once it returns.
+  once it returns, and every remote also runs as a standalone app.
 - Tested in development and production builds on Node 22.18, 24, and 26, with
   Vite 8.3, Rsbuild 2.2, TanStack Start 1.168, and React 19.3.

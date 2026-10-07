@@ -42,17 +42,18 @@ the remotes once they return.
 - [x] Give remotes `publicPath: "auto"`. TanStack Start derives `/` from
       `server.base`, which made production remotes request their chunks from
       the host's origin, and made Node hosts fail to fetch them.
-- [x] Make the container loadable by `@module-federation/vite`: a root-level
-      file (its SSR loader joins `path` and `name` without a separator), a
-      `.cjs` name (it treats every `.ssr.js` URL as an ES module), and static
-      `init`/`get` re-exports so ES module importers see named exports.
+- [x] Keep the container next to the manifest, so its chunks resolve the same
+      way from the container URL (Module Federation's Node runtime) and from
+      the manifest URL (`@module-federation/vite`).
 
 ### Rsbuild hosts on the server
 
 - [x] Load remotes in a host's server bundle as async-node CommonJS, keep
       `dist/server/index.js` as an ES module that re-exports it, and write the
       server output to disk in development so async-node chunks match the
-      in-memory entry.
+      in-memory entry. The dev bundle goes to
+      `node_modules/.cache/tanstack-start-federation/`, so it never replaces a
+      production build in `dist/server`.
 - [x] `@module-federation/tanstack/node-entry-loader` compiles CommonJS
       containers as CommonJS modules, so their `import()` calls work in
       Rsbuild's development runner without experimental Node flags or
@@ -74,12 +75,9 @@ the remotes once they return.
       is `^8.0.0`, and the adapter stops with an error on older versions: on
       Vite 7, `@module-federation/vite` hangs server-side remote loads in
       development and emits an unresolved `virtual:` import in production.
-- [x] Work around an unhandled rejection in `@module-federation/vite` that
-      exited a Vite host's dev server when a server-rendered remote went
-      offline: the adapter handles the `__mf_remote_pending` export.
-- [x] Work around `@module-federation/vite` importing saved remote entries
-      through Vite's dev module runner, which evaluates CommonJS containers as
-      ES modules: the adapter imports them through Node in development.
+- [x] Require `@module-federation/vite` 1.23.3, which ships the fixes for the
+      problems found here (see "Fixed upstream" below), so the adapter needs
+      no workarounds for it.
 
 ### SSR quality and hardening
 
@@ -93,12 +91,14 @@ the remotes once they return.
       offline, and render remote markup again once they return, in development
       and production.
 - [x] Hosts recover from a remote that failed its first load, such as a host
-      started during an outage. Four caches kept the failure, each now
-      cleared: the Vite server wrapper's single load attempt, Vite's dev module
-      runner caching the wrapper's rejected `then` export, Rspack's module
-      cache (a failed remote module kept empty exports; Rspack's
-      `strictModuleExceptionHandling` caches the error instead, so the adapter
-      removes the module from the cache), and `React.lazy` (`lazyRemote`).
+      started during an outage. Three layers kept the failure:
+      `@module-federation/vite`'s single load attempt (fixed in 1.23.3),
+      Rspack's module cache (a failed remote module kept empty exports;
+      Rspack's `strictModuleExceptionHandling` caches the error instead, so
+      the adapter removes the module from the cache), and `React.lazy`
+      (`lazyRemote`).
+- [x] Every remote, including the Vite remote, works as a standalone TanStack
+      Start app (`@module-federation/vite` 1.23.3).
 - [x] `useState`, `useEffect`, Suspense, and error boundaries across the
       federation boundary (counter, hydration status, lazy remote components,
       `RemoteBoundary`).
@@ -110,38 +110,7 @@ the remotes once they return.
 
 ### Upstream issues
 
-Reported to `module-federation/vite`; the adapters work around each one until a
-release ships the fix. Remove the workaround when it does.
-
-- [ ] An unawaited `__mf_remote_pending` turns a remote outage into an
-      unhandled rejection that exits a dev server.
-      [vite#1421](https://github.com/module-federation/vite/pull/1421) (PR).
-      Worked around by `remotePendingPlugin`.
-- [ ] A server wrapper makes one load attempt, so a remote that fails its
-      first load fails for the life of the process; in development, Vite's
-      module runner also caches the wrapper's rejected `then` export.
-      [vite#1424](https://github.com/module-federation/vite/issues/1424).
-      Worked around by `remotePendingPlugin`. Browser wrappers make one
-      attempt too, which a page reload clears.
-- [ ] The SSR loader cannot load a CommonJS server container from a manifest:
-      it treats any `.ssr.js` URL as an ES module, joins `path` and `name`
-      without a separator, returns the CommonJS namespace instead of
-      `namespace.default`, and in development imports the saved entry through
-      Vite's module runner.
-      [vite#1423](https://github.com/module-federation/vite/issues/1423).
-      Worked around by the root-level `remoteEntry.ssr.cjs` container with
-      named-export re-assignments, and by `nativeTempModuleImportPlugin`.
-- [ ] Rollup builds (Vite 5 to 7) keep an unresolved
-      `virtual:mf-exposes-ssr:` import in the SSR entry outside Nuxt.
-      [vite#1422](https://github.com/module-federation/vite/pull/1422) (PR).
-      Not worked around: this package requires Vite 8.
-- [ ] A Vite remote with `exposes` does not hydrate when opened directly in
-      development (`forceClientInjected`), and since 1.23.0 not in production
-      either (`x is not a function` from the `react-dom/client` share; 1.22.0
-      and 1.22.1 work). Fixed on `main` (#1413, #1415, #1420); update when a
-      release ships.
-
-Still to report to `module-federation/core`:
+To report to `module-federation/core`:
 
 - [ ] `@module-federation/webpack-bundler-runtime`: a remote module that
       failed stays in the module cache with empty exports, although the load
@@ -149,6 +118,26 @@ Still to report to `module-federation/core`:
 - [ ] `@module-federation/node`: a container without an absolute public path
       logs `Backup remote entry found` for every chunk it loads through a Vite
       host.
+
+Fixed upstream in `@module-federation/vite` 1.23.3:
+
+- [x] An unawaited `__mf_remote_pending` turned a remote outage into an
+      unhandled rejection that exited a dev server
+      ([vite#1421](https://github.com/module-federation/vite/pull/1421)).
+- [x] A server wrapper made one load attempt, so a remote that failed its
+      first load failed for the life of the process
+      ([vite#1424](https://github.com/module-federation/vite/issues/1424),
+      fixed by [vite#1426](https://github.com/module-federation/vite/pull/1426)).
+- [x] The SSR loader could not load a CommonJS server container from a
+      manifest ([vite#1423](https://github.com/module-federation/vite/issues/1423),
+      fixed by [vite#1425](https://github.com/module-federation/vite/pull/1425)).
+- [x] Rollup builds (Vite 5 to 7) kept an unresolved `virtual:mf-exposes-ssr:`
+      import in the SSR entry outside Nuxt
+      ([vite#1422](https://github.com/module-federation/vite/pull/1422)).
+- [x] A Vite remote with `exposes` did not hydrate when opened directly
+      ([vite#1413](https://github.com/module-federation/vite/issues/1413),
+      fixed by [vite#1415](https://github.com/module-federation/vite/pull/1415)
+      and [vite#1420](https://github.com/module-federation/vite/pull/1420)).
 
 ### SSR quality
 

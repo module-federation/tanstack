@@ -61,6 +61,5 @@ back. The same holds for a host started before its remotes.
 - Each `start` script runs the bundler's development server. In Vite's CLI the
   bare `vite` command starts the dev server; `vite start` would treat `start`
   as a project directory.
-- Opening the Vite remote directly (port 3001) server-renders the page but does
-  not hydrate it: `@module-federation/vite` waits for a host to initialize a
-  container with `exposes`. It hydrates when loaded through a host.
+- Every remote also works as a standalone TanStack Start app: open port 3001,
+  3002, or 3004 directly, and its card shows "Host: standalone".

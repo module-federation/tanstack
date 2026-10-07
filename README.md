@@ -58,7 +58,8 @@ and SSR environments from one Vite configuration, so the wrapper leaves target
 selection to `@module-federation/vite` for each environment.
 
 The package supports Node 22.18+, 24.11+, and 26+, plus TanStack Start
-1.167.43+. The Vite adapter requires Vite 8.
+1.167.43+. The Vite adapter requires Vite 8 and `@module-federation/vite`
+1.23.3+.
 
 The package root remains a Vite compatibility export. New Vite projects can
 import `/vite` explicitly. Rsbuild projects must import `/rsbuild`:

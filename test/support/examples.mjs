@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, before, test } from "node:test";
@@ -48,7 +49,12 @@ export function describeExamples(script) {
     await waitForResponse(`${apps[key].url}__ready`, processes[key], ({ status }) => status < 500);
   };
 
+  // Production server entries of the Rsbuild SSR host, read before its dev server starts.
+  const serverBuild = join(root, "apps", "rsbuild-ssr-host", "dist", "server", "index.cjs");
+  let productionServerEntry;
+
   before(async () => {
+    if (existsSync(serverBuild)) productionServerEntry = readFileSync(serverBuild, "utf8");
     await Promise.all(remotes.map(start));
     await Promise.all(hosts.map(start));
     browser = await chromium.launch();
@@ -122,6 +128,17 @@ export function describeExamples(script) {
     }
   });
 
+  if (script === "start") {
+    test("development servers leave production server builds alone", (t) => {
+      if (productionServerEntry === undefined) {
+        t.skip("needs a production build from before the development servers started");
+        return;
+      }
+      // `rsbuild preview` serves dist/server, so a dev server must not write its bundle there.
+      assert.equal(readFileSync(serverBuild, "utf8"), productionServerEntry);
+    });
+  }
+
   test("remote manifests reference reachable assets", async () => {
     for (const key of remotes) {
       const manifestUrl = new URL("mf-manifest.json", apps[key].url).href;
@@ -163,8 +180,9 @@ export function describeExamples(script) {
     });
   });
 
-  test("Rsbuild remotes work as standalone TanStack Start apps", async () => {
+  test("remotes work as standalone TanStack Start apps", async () => {
     for (const [key, card] of [
+      ["viteRemote", cards.vite],
       ["rsbuildRemote", cards.rsbuild],
       ["rsbuildSsrRemote", cards.rsbuildSsr],
     ]) {
@@ -174,10 +192,6 @@ export function describeExamples(script) {
       });
     }
   });
-
-  // @module-federation/vite never initializes a container with `exposes` when it is opened
-  // directly in development, and 1.23.0 broke the production path too (1.22.x works).
-  test.todo("Vite remote hydrates as a standalone app");
 
   // The last two scenarios stop remotes, then start them again.
   test("hosts fall back while remotes are offline and recover when they return", async () => {

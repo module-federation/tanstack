@@ -139,7 +139,10 @@ Pass `server: true` (or an options object) to federate on the server:
   Federation Node runtime. TanStack Start's server output becomes async-node
   CommonJS (`dist/server/index.cjs`), with `dist/server/index.js` re-exporting
   it, so `rsbuild preview` and deployments that import `index.js` keep working.
-  Rsbuild remotes need `server: true` too. Vite remotes need nothing extra on
+  The dev server writes its server bundle to
+  `node_modules/.cache/tanstack-start-federation/` instead, so a production
+  build in `dist/server` survives development sessions. Rsbuild remotes need
+  `server: true` too. Vite remotes need nothing extra on
   their side, but the host must have `@module-federation/vite` (and its `vite`
   peer) installed: their server entries are ES modules, loaded by that
   package's SSR loader.
@@ -188,9 +191,9 @@ examples in `apps/` include one.
   `React.lazy` component that fails once stays failed, so a server that hit a
   remote outage would render the fallback until it restarts. `lazyRemote` loads
   again on the first render after `retryAfterMs` (5 seconds by default). The
-  adapters make the import itself load again after a failure too, in
-  development and production: on its own, each bundler keeps the first failure
-  for the life of the process.
+  import itself loads again after a failure too: `@module-federation/vite`
+  1.23.3+ retries failed server loads, and the Rsbuild adapter removes a failed
+  remote module from Rspack's module cache.
 - **`getRemoteStylesheets(manifestUrl, expose, { maxAgeMs })`** lists the
   stylesheets the remote's manifest declares for an expose, as absolute URLs. A
   remote's CSS otherwise loads with its JavaScript, after the HTML, so the
@@ -200,10 +203,6 @@ examples in `apps/` include one.
 
 ## Known limitations
 
-- A Vite remote with `exposes` does not hydrate when opened directly as an app:
-  `@module-federation/vite` waits for a host to initialize it. Production builds
-  worked standalone up to `@module-federation/vite` 1.22.1; 1.23.0 broke them.
-  Loading the remote through a host is unaffected.
 - In development, a Vite remote's server modules import React from the files
   its dev server resolves, so host and remote must resolve React to the same
   files, as they do in a monorepo. Production builds take React from the
@@ -219,7 +218,7 @@ examples in `apps/` include one.
   of 1.168 its Rsbuild server build fails with it: TanStack Router imports
   React's `use`, which React 18 lacks. React 18 with Vite builds but is
   untested.
-- Vite: `@module-federation/vite` and `vite`.
+- Vite: `@module-federation/vite` 1.23.3+ and `vite` 8.
 - Rsbuild: `@module-federation/rsbuild-plugin` and `@rsbuild/core`. An Rsbuild
   host that renders Vite remotes on the server also needs
-  `@module-federation/vite` and `vite`.
+  `@module-federation/vite` 1.23.3+ and `vite`.

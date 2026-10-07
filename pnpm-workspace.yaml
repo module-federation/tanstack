@@ -3,4 +3,6 @@ packages:
   - packages/*
 
 autoInstallPeers: false
+minimumReleaseAgeExclude:
+  - "@module-federation/vite@1.23.3"
 preferFrozenLockfile: true

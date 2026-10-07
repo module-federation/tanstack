@@ -136,165 +136,6 @@ test("the Vite adapter fails fast on Vite 7", () => {
   assert.doesNotThrow(() => plugin.config.call({ meta: { viteVersion: "8.3.2" } }));
 });
 
-test("unawaited remote pending exports cannot crash the dev server", () => {
-  const plugin = vitePlugin("tanstack-start-federation:remote-pending");
-  assert.equal(plugin.enforce, "post");
-  assert.ok(plugin.transform.filter.id.test("\0virtual:mf:host__loadRemote__remote_mf_1_Card"));
-
-  const wrapper = "export const __mf_remote_pending =\n  __mfStartRemoteLoad();";
-  const { code, map } = plugin.transform.handler(wrapper);
-  assert.equal(map, null);
-  assert.ok(code.startsWith(wrapper), "the generated code is unchanged");
-  assert.match(code, /__mf_remote_pending\?\.catch\?\.\(\(\) => \{\}\);\n$/);
-
-  // Wrappers that already handle the export, or have none, are left alone.
-  assert.equal(plugin.transform.handler(code), undefined);
-  assert.equal(plugin.transform.handler("export default 1;"), undefined);
-});
-
-/**
- * The shape of @module-federation/vite's server wrapper, with loads that follow `outcomes`.
- * `dev` adds the `then` export development server wrappers have.
- */
-function remoteWrapper({ dev = false } = {}) {
-  return [
-    "let attempts = 0;",
-    "const outcomes = ['offline', 'online'];",
-    "function __mfStartRemoteLoad() {",
-    "  attempts++;",
-    "  return outcomes.shift() === 'online'",
-    "    ? Promise.resolve({ default: 'Card' })",
-    "    : new Promise((_, reject) => setTimeout(() => reject(new Error('offline')), 10));",
-    "}",
-    "let exportModule;",
-    "let __mfDefaultExport;",
-    "function __mfAssignRemoteModule(mod) {",
-    "  if (mod !== undefined) exportModule = mod;",
-    "  __mfDefaultExport = exportModule?.default;",
-    "  return exportModule;",
-    "}",
-    "let __mfRemotePending;",
-    "if (exportModule === undefined) {",
-    "  __mfRemotePending = __mfStartRemoteLoad().then(__mfAssignRemoteModule);",
-    "}",
-    "export { exportModule as __moduleExports };",
-    "export const __mf_remote_pending =",
-    "  __mfRemotePending ??",
-    "  __mfStartRemoteLoad().then(__mfAssignRemoteModule);",
-    ...(dev
-      ? [
-          "export function then(onFulfilled, onRejected) {",
-          "  return (__mfRemotePending ?? Promise.resolve(exportModule))",
-          "    .then(__mfAssignRemoteModule)",
-          "    .then(() => ({ default: __mfDefaultExport, __mf_remote_pending: __mfRemotePending }))",
-          "    .then(onFulfilled, onRejected);",
-          "}",
-        ]
-      : []),
-    "export const getAttempts = () => attempts;",
-  ].join("\n");
-}
-
-/** Writes a transformed wrapper and passes its URL and its raw module namespace to `check`. */
-async function importTransformed(code, check) {
-  const directory = mkdtempSync(join(tmpdir(), "mf-tanstack-wrapper-"));
-  try {
-    const file = join(directory, "wrapper.mjs");
-    writeFileSync(file, code);
-    // `import()` adopts a namespace with a `then` export; a static import does not.
-    const namespaceFile = join(directory, "namespace.mjs");
-    writeFileSync(
-      namespaceFile,
-      'import * as wrapper from "./wrapper.mjs";\nexport { wrapper };\n',
-    );
-    const { wrapper } = await import(pathToFileURL(namespaceFile).href);
-    await check(pathToFileURL(file).href, wrapper);
-  } finally {
-    rmSync(directory, { force: true, recursive: true });
-  }
-}
-
-test("server remote wrappers load again after a failed attempt", async () => {
-  const plugin = vitePlugin("tanstack-start-federation:remote-pending");
-  const wrapper = remoteWrapper();
-  const { code, map } = plugin.transform.handler(wrapper);
-  assert.equal(map, null);
-  const lines = code.split("\n");
-  const exportLine = wrapper.split("\n").findIndex((line) => line.includes("__mf_remote_pending"));
-  assert.equal(lines[exportLine], "export let   __mf_remote_pending =", "columns stay in place");
-
-  await importTransformed(code, async (_url, wrapperModule) => {
-    // The first importer sees the failure, without an unhandled rejection...
-    await assert.rejects(Promise.resolve(wrapperModule.__mf_remote_pending), /offline/);
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(wrapperModule.getAttempts(), 1, "nothing retries until the next import");
-
-    // ...and the next one loads again.
-    assert.deepEqual(await wrapperModule.__mf_remote_pending, { default: "Card" });
-    assert.equal(wrapperModule.getAttempts(), 2);
-    assert.deepEqual(wrapperModule.__moduleExports, { default: "Card" });
-    assert.deepEqual(await wrapperModule.__mf_remote_pending, { default: "Card" });
-    assert.equal(wrapperModule.getAttempts(), 2, "a successful load is reused");
-  });
-});
-
-test("development wrappers resolve after a failed load, so Vite does not cache it", async () => {
-  const plugin = vitePlugin("tanstack-start-federation:remote-pending");
-  const wrapper = remoteWrapper({ dev: true });
-  const { code } = plugin.transform.handler(wrapper);
-  assert.equal(
-    code.split("\n")[
-      wrapper.split("\n").findIndex((line) => line.startsWith("export function then"))
-    ],
-    "function __mfThen1st(onFulfilled, onRejected) {",
-    "columns stay in place",
-  );
-
-  await importTransformed(code, async (url, wrapperModule) => {
-    // Like Vite's module runner, `import()` awaits the wrapper's `then` export once.
-    const cached = await import(url);
-    assert.equal(cached.default, undefined, "the first load failed");
-    assert.equal(wrapperModule.getAttempts(), 1);
-
-    // Importers read the load through `__mf_remote_pending`, which loads again.
-    assert.deepEqual(await cached.__mf_remote_pending, { default: "Card" });
-    assert.equal(cached.default, "Card", "the cached exports are live");
-    assert.deepEqual(cached.__moduleExports, { default: "Card" });
-    assert.equal(wrapperModule.getAttempts(), 2);
-  });
-});
-
-test("development SSR imports saved remote entries through Node", async () => {
-  const plugin = vitePlugin("tanstack-start-federation:native-temp-module-import");
-  assert.equal(plugin.apply, "serve");
-  const { filter } = plugin.transform;
-  const loaderPath = "/app/node_modules/@module-federation/vite/lib/ssrEntryLoader-DEH3eV1e.js";
-  assert.ok(filter.id.test(loaderPath));
-  assert.ok(filter.id.test(`${loaderPath}?v=b50fefa8`), "Vite's dependency query is allowed");
-  assert.equal(filter.id.test("/app/node_modules/@module-federation/vite/lib/index.js"), false);
-
-  const loader = [
-    "async function importTempModule(filePath, versionKey) {",
-    "\treturn await import(",
-    "\t\t/* @vite-ignore */",
-    "\t\t`${filePath}?v=${encodeURIComponent(versionKey)}`",
-    ");",
-    "}",
-    "const other = () => import('./chunk.js');",
-  ].join("\n");
-  const { code, map } = plugin.transform.handler(loader);
-  assert.equal(map, null);
-  assert.equal(code.split("\n").length, loader.split("\n").length + 2, "only appends lines");
-  assert.match(code, /return await __mfNativeImport\(/);
-  assert.match(code, /const other = \(\) => import\('\.\/chunk\.js'\);/);
-
-  // The helper imports through Node's loader.
-  const nativeImport = new Function(`${code}\nreturn __mfNativeImport;`)();
-  assert.equal((await nativeImport("node:path")).sep, "/");
-
-  assert.equal(plugin.transform.handler("export default 1;"), undefined);
-});
-
 test("Rsbuild shared defaults never mutate caller overrides", () => {
   const callerShared = { react: { eager: false, singleton: false } };
   const before = structuredClone(callerShared);
@@ -441,20 +282,8 @@ test("Rsbuild SSR remotes ship a Node container with the browser assets", async 
     /Register tanstackStart\(\) before tanstackStartModuleFederation\(\)/,
   );
 
-  // ES module importers of the container need `init` and `get` as detectable named exports.
-  let updated;
-  hooks.processAssets.handler({
-    assets: { "remoteEntry.ssr.cjs": {} },
-    compilation: { updateAsset: (name, update) => (updated = [name, update("container;")]) },
-    sources: { ConcatSource: class extends Array {} },
-  });
-  assert.deepEqual(hooks.processAssets.options, {
-    stage: "summarize",
-    environments: ["mf-server"],
-  });
-  assert.equal(updated[0], "remoteEntry.ssr.cjs");
-  assert.match(updated[1].join(""), /module\.exports\.init = module\.exports\.init;/);
-  assert.match(updated[1].join(""), /module\.exports\.get = module\.exports\.get;/);
+  // The container is emitted as Module Federation builds it.
+  assert.equal(hooks.processAssets, undefined);
 
   const [client, container] = federationOptions({ federation: rsbuildRemote, server: true });
   assert.equal(container.filename, "remoteEntry.ssr.cjs");
@@ -501,9 +330,24 @@ test("Rsbuild SSR hosts load remotes from an async-node CommonJS server", () => 
     module: false,
   });
 
-  const environmentConfig = { dev: {} };
-  hooks.modifyEnvironmentConfig(environmentConfig, { name: "ssr" });
-  assert.equal(environmentConfig.dev.writeToDisk, true, "async-node chunks are read from disk");
+  const environmentConfig = () => ({ dev: {}, output: { distPath: { root: "dist/server" } } });
+  const buildConfig = environmentConfig();
+  hooks.modifyEnvironmentConfig(buildConfig, { name: "ssr" });
+  assert.equal(buildConfig.dev.writeToDisk, true, "async-node chunks are read from disk");
+  assert.equal(buildConfig.output.distPath.root, "dist/server");
+
+  // A dev server writes its bundle elsewhere, so a production build in dist/server survives.
+  const devHooks = runHooks(
+    plugins.find(({ name }) => name === "tanstack-start-federation-ssr-compat"),
+    { action: "dev" },
+  );
+  const devConfig = environmentConfig();
+  devHooks.modifyEnvironmentConfig(devConfig, { name: "ssr" });
+  assert.equal(devConfig.dev.writeToDisk, true);
+  assert.equal(
+    devConfig.output.distPath.root,
+    join("/app", "node_modules", ".cache", "tanstack-start-federation", "ssr"),
+  );
 
   const emitted = {};
   hooks.processAssets.handler({
@@ -572,9 +416,10 @@ function federationOptions(options) {
 }
 
 /** Runs a plugin's setup against a recording API and returns the hooks it registered. */
-function runHooks(plugin) {
+function runHooks(plugin, { action = "build" } = {}) {
   const hooks = {};
   plugin.setup({
+    context: { action, rootPath: "/app" },
     modifyEnvironmentConfig: (handler) => (hooks.modifyEnvironmentConfig = handler),
     modifyRsbuildConfig: (hook) => (hooks.modifyRsbuildConfig = hook),
     onBeforeCreateCompiler: (handler) => (hooks.onBeforeCreateCompiler = handler),

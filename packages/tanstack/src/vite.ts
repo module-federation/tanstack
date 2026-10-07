@@ -1,11 +1,7 @@
 import { federation, type ModuleFederationOptions } from "@module-federation/vite";
 import type { Plugin } from "vite";
 import { defaultShared, eagerShared, resolveShared } from "./shared";
-import {
-  nativeTempModuleImportPlugin,
-  remotePendingPlugin,
-  viteVersionPlugin,
-} from "./vite-compat";
+import { viteVersionPlugin } from "./vite-compat";
 
 export type TanStackStartModuleFederationOptions = Omit<ModuleFederationOptions, "target">;
 
@@ -36,7 +32,5 @@ export function tanstackStartModuleFederation(
         isHost ? eagerShared : defaultShared,
       ) as ModuleFederationOptions["shared"],
     }),
-    remotePendingPlugin(),
-    nativeTempModuleImportPlugin(),
   ];
 }

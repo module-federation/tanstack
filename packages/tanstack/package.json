@@ -99,7 +99,7 @@
   },
   "peerDependencies": {
     "@module-federation/rsbuild-plugin": "^2.9.0",
-    "@module-federation/vite": "^1.22.0",
+    "@module-federation/vite": "^1.23.3",
     "@rsbuild/core": "^2.0.0",
     "@tanstack/react-start": "^1.167.43",
     "react": ">=18.0.0",
@@ -128,7 +128,7 @@
   "devDependencies": {
     "@module-federation/rsbuild-plugin": "2.9.2",
     "@module-federation/runtime": "2.9.2",
-    "@module-federation/vite": "1.23.2",
+    "@module-federation/vite": "1.23.3",
     "@rsbuild/core": "2.2.11",
     "@rslib/core": "1.0.3",
     "@tanstack/react-start": "1.168.60",
