@@ -1,6 +1,6 @@
 {
   "name": "@module-federation/tanstack",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "type": "module",
   "description": "TanStack Start integration for Module Federation",
   "license": "MIT",
@@ -68,8 +68,7 @@
     "LICENSE"
   ],
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   },
   "repository": {
     "type": "git",
