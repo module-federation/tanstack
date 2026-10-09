@@ -5,6 +5,7 @@ import {
 } from "@module-federation/rsbuild-plugin";
 import type { RsbuildPlugin } from "@rsbuild/core";
 import { defaultShared, eagerShared, resolveShared } from "./shared";
+import type { NodeEntryLoaderOptions } from "./node-entry-loader";
 
 type ModuleFederationOverride = Partial<ModuleFederationOptions>;
 
@@ -21,6 +22,7 @@ type ServerFederationOptions =
       entryFilename?: string;
       environment?: string;
       forceCommonJsOutput?: boolean;
+      ssrEntryLoader?: NodeEntryLoaderOptions;
     });
 
 export type TanStackStartRsbuildModuleFederationOptions = {
@@ -96,6 +98,7 @@ export function tanstackStartModuleFederation({
     entryFilename,
     environment: serverEnvironment = "ssr",
     forceCommonJsOutput = true,
+    ssrEntryLoader,
     ...serverOverrides
   } = server === true ? {} : server;
 
@@ -129,7 +132,12 @@ export function tanstackStartModuleFederation({
         {
           ...withDefaults(hostOptions, eagerShared),
           manifest: false,
-          runtimePlugins: [...(hostOptions.runtimePlugins ?? []), NODE_ENTRY_LOADER],
+          runtimePlugins: [
+            ...(hostOptions.runtimePlugins ?? []),
+            ssrEntryLoader
+              ? [NODE_ENTRY_LOADER, Object.fromEntries(Object.entries(ssrEntryLoader))]
+              : NODE_ENTRY_LOADER,
+          ],
         },
         { environment: serverEnvironment, target: "node" },
       ),

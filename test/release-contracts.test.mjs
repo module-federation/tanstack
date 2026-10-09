@@ -76,6 +76,24 @@ test("Vite hosts provide their own React eagerly so remotes cannot replace it", 
   assert.equal(overridden.shared.react.shareConfig.eager, false, "explicit entries win");
 });
 
+test("Vite hosts preserve SSR entry-loader revalidation options", () => {
+  const options = upstreamOptions({
+    name: "host",
+    ssrEntryLoader: {
+      fetchMaxBytes: 1024,
+      fetchTimeoutMs: 5000,
+      maxAgeMs: 1000,
+      strategy: "vm",
+    },
+  });
+  assert.deepEqual(options.ssrEntryLoader, {
+    fetchMaxBytes: 1024,
+    fetchTimeoutMs: 5000,
+    maxAgeMs: 1000,
+    strategy: "vm",
+  });
+});
+
 test("preserves explicit federation settings and shared entries", () => {
   const options = upstreamOptions({
     name: "remote",
@@ -366,6 +384,24 @@ test("Rsbuild SSR hosts load remotes from an async-node CommonJS server", () => 
   });
   assert.deepEqual(hooks.processAssets.options, { stage: "additional", environments: ["ssr"] });
   assert.match(emitted["index.js"], /await createRequire\(import\.meta\.url\)\("\.\/index\.cjs"\)/);
+});
+
+test("Rsbuild SSR hosts forward server entry revalidation options", () => {
+  const [, server] = federationOptions({
+    federation: rsbuildHost,
+    server: {
+      ssrEntryLoader: {
+        fetchMaxBytes: 1024,
+        fetchTimeoutMs: 5000,
+        maxAgeMs: 1000,
+        strategy: "vm",
+      },
+    },
+  });
+  assert.deepEqual(server.runtimePlugins.at(-1), [
+    "@module-federation/tanstack/node-entry-loader",
+    { fetchMaxBytes: 1024, fetchTimeoutMs: 5000, maxAgeMs: 1000, strategy: "vm" },
+  ]);
 });
 
 test("Rsbuild ESM server output is left to TanStack Start", () => {

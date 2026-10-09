@@ -18,6 +18,7 @@ const { getRemoteStylesheets, lazyRemote } = await import(
 );
 // The React copy the runtime resolves.
 const packageRequire = createRequire(join(root, "packages", "tanstack", "package.json"));
+const { createInstance } = packageRequire("@module-federation/runtime");
 const { createElement, Suspense } = packageRequire("react");
 const { renderToString } = packageRequire("react-dom/server");
 const { prerenderToNodeStream } = packageRequire("react-dom/static");
@@ -35,7 +36,10 @@ before(async () => {
       response.writeHead(404).end();
       return;
     }
-    response.writeHead(200, { "content-type": file.type }).end(file.body);
+    const body = typeof file.body === "function" ? file.body() : file.body;
+    const send = () => response.writeHead(200, { "content-type": file.type }).end(body);
+    if (file.delayMs) setTimeout(send, file.delayMs);
+    else send();
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   origin = `http://127.0.0.1:${server.address().port}`;
@@ -43,8 +47,8 @@ before(async () => {
 
 after(() => server.close());
 
-function serve(path, body, type = "text/javascript") {
-  files.set(path, { body, type });
+function serve(path, body, type = "text/javascript", delayMs = 0) {
+  files.set(path, { body, delayMs, type });
   return `${origin}${path}`;
 }
 
@@ -72,6 +76,198 @@ test("loads HTTP CommonJS containers as CommonJS modules", async () => {
   const container = await loadEntry(entry);
   const factory = await container.get("./Card");
   assert.deepEqual(factory(), { request: "./Card", separator: "/", filename: entry });
+});
+
+test("revalidates a CommonJS server entry after maxAgeMs expires", async () => {
+  let version = "v1";
+  const entry = serve(
+    "/revalidate/remoteEntry.ssr.cjs",
+    () => `
+      module.exports.remote = {
+        init() {},
+        async get() {
+          return () => ({ default: "${version}" });
+        },
+      };
+    `,
+  );
+  const host = createInstance({
+    name: "revalidate_host",
+    remotes: [
+      {
+        name: "revalidate_remote",
+        entry,
+        entryGlobalName: "remote",
+        type: "commonjs-module",
+      },
+    ],
+    plugins: [nodeEntryLoader({ maxAgeMs: 0 })],
+  });
+
+  assert.deepEqual(await host.loadRemote("revalidate_remote/Value"), { default: "v1" });
+  version = "v2";
+  assert.deepEqual(await host.loadRemote("revalidate_remote/Value"), { default: "v2" });
+  assert.equal(
+    requests.filter((request) => request === "/revalidate/remoteEntry.ssr.cjs").length,
+    2,
+  );
+});
+
+test("measures maxAgeMs from the remote entry load, not the last expose request", async () => {
+  const originalNow = Date.now;
+  let now = 0;
+  Date.now = () => now;
+  try {
+    let version = "v1";
+    const entry = serve(
+      "/revalidate/ttl-remoteEntry.ssr.cjs",
+      () => `
+        module.exports.remote = {
+          init() {},
+          async get() {
+            return () => ({ default: "${version}" });
+          },
+        };
+      `,
+    );
+    const host = createInstance({
+      name: "ttl_host",
+      remotes: [
+        {
+          name: "ttl_remote",
+          entry,
+          entryGlobalName: "remote",
+          type: "commonjs-module",
+        },
+      ],
+      plugins: [nodeEntryLoader({ maxAgeMs: 100 })],
+    });
+
+    assert.deepEqual(await host.loadRemote("ttl_remote/Value"), { default: "v1" });
+    now = 60;
+    version = "v2";
+    assert.deepEqual(await host.loadRemote("ttl_remote/Value"), { default: "v1" });
+    now = 101;
+    version = "v3";
+    assert.deepEqual(await host.loadRemote("ttl_remote/Value"), { default: "v3" });
+    assert.equal(
+      requests.filter((request) => request === "/revalidate/ttl-remoteEntry.ssr.cjs").length,
+      2,
+    );
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test("single-flights concurrent remote revalidation requests", async () => {
+  const originalNow = Date.now;
+  let now = 0;
+  Date.now = () => now;
+  try {
+    let version = "v1";
+    const entry = serve(
+      "/revalidate/concurrent-remoteEntry.ssr.cjs",
+      () => `
+        module.exports.remote = {
+          init() {},
+          async get() {
+            return () => ({ default: "${version}" });
+          },
+        };
+      `,
+      "text/javascript",
+      10,
+    );
+    const host = createInstance({
+      name: "concurrent_revalidate_host",
+      remotes: [
+        {
+          name: "concurrent_revalidate_remote",
+          entry,
+          entryGlobalName: "remote",
+          type: "commonjs-module",
+        },
+      ],
+      plugins: [nodeEntryLoader({ maxAgeMs: 100 })],
+    });
+
+    assert.deepEqual(await host.loadRemote("concurrent_revalidate_remote/Value"), {
+      default: "v1",
+    });
+    now = 101;
+    version = "v2";
+    const values = await Promise.all([
+      host.loadRemote("concurrent_revalidate_remote/Value"),
+      host.loadRemote("concurrent_revalidate_remote/Value"),
+    ]);
+
+    assert.deepEqual(values, [{ default: "v2" }, { default: "v2" }]);
+    assert.equal(
+      requests.filter((request) => request === "/revalidate/concurrent-remoteEntry.ssr.cjs").length,
+      2,
+    );
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test("allows disabling the CommonJS entry timeout", async () => {
+  const entry = serve(
+    "/timeout/remoteEntry.ssr.cjs",
+    `
+      module.exports.remote = {
+        init() {},
+        async get() {
+          return () => ({ default: "loaded" });
+        },
+      };
+    `,
+    "text/javascript",
+    20,
+  );
+  const container = await nodeEntryLoader({ fetchTimeoutMs: 0 }).loadEntry({
+    origin: {},
+    remoteInfo: {
+      entry,
+      entryGlobalName: "remote",
+      name: "timeout_remote",
+      type: "commonjs-module",
+    },
+  });
+
+  assert.equal(typeof container.get, "function");
+});
+
+test("revalidates a Vite SSR entry after maxAgeMs expires", async () => {
+  let requestsForViteEntry = 0;
+  const entry = serve("/revalidate-vite/remoteEntry.ssr.js", () => {
+    requestsForViteEntry += 1;
+    return `
+      export async function init() {}
+      export async function get() {
+        return () => ({ default: "v${requestsForViteEntry}" });
+      }
+      `;
+  });
+  const outcome = await runInHost(`
+    const { createRequire } = await import("node:module");
+    const { createInstance } = createRequire(process.cwd() + "/package.json")(
+      "@module-federation/runtime",
+    );
+    const host = createInstance({
+      name: "revalidate_vite_host",
+      remotes: [{ name: "revalidate_vite_remote", entry: ${JSON.stringify(entry)}, type: "module" }],
+      plugins: [loader({ maxAgeMs: 0 })],
+    });
+    const first = await host.loadRemote("revalidate_vite_remote/Value");
+    const second = await host.loadRemote("revalidate_vite_remote/Value");
+    console.log(JSON.stringify({ first, second }));
+  `);
+  assert.deepEqual(outcome, {
+    first: { default: "v1" },
+    second: { default: "v2" },
+  });
+  assert.equal(requestsForViteEntry, 2);
 });
 
 test("reports which step failed and keeps the cause", async () => {
