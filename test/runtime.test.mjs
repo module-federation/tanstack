@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { execFile, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { after, before, test } from "node:test";
@@ -327,6 +327,43 @@ test("Vite remotes ask for @module-federation/vite when the host lacks it", () =
     const error = JSON.parse(result.stdout);
     assert.equal(error.phase, "loader");
     assert.match(error.message, /Add @module-federation\/vite to the host's dependencies/);
+  } finally {
+    rmSync(app, { force: true, recursive: true });
+  }
+});
+
+test("resolves a transitive Router core package from the Router package root", () => {
+  const app = mkdtempSync(join(tmpdir(), "mf-tanstack-transitive-"));
+  try {
+    const routerRequire = createRequire(join(root, "apps", "rsbuild-ssr-host", "package.json"));
+    const routerEntry = routerRequire.resolve("@tanstack/react-router");
+    const routerPackage = resolve(dirname(routerEntry), "../..");
+    const routerLink = join(app, "node_modules", "@tanstack", "react-router");
+    mkdirSync(dirname(routerLink), { recursive: true });
+    symlinkSync(routerPackage, routerLink, "dir");
+    writeFileSync(join(app, "package.json"), JSON.stringify({ private: true }));
+
+    const script = join(app, "server.mjs");
+    writeFileSync(
+      script,
+      `const { default: loader } = await import(${JSON.stringify(loaderUrl)});
+       let registered;
+       loader().apply({
+         name: "host",
+         options: { shared: {} },
+         registerShared(shared) { registered = shared; },
+       });
+       console.log(JSON.stringify({
+         router: registered?.["@tanstack/react-router"]?.version,
+         routerCore: registered?.["@tanstack/router-core"]?.version,
+       }));`,
+    );
+    const result = spawnSync(process.execPath, [script], { cwd: app, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), {
+      router: "1.170.41",
+      routerCore: "1.171.34",
+    });
   } finally {
     rmSync(app, { force: true, recursive: true });
   }

@@ -6,6 +6,7 @@ import { RemoteBoundary } from "../components/RemoteBoundary";
 // Unlike React.lazy, lazyRemote loads again after a failure, so a server that hit a remote
 // outage renders the remote once it is back.
 const RemoteStatusCard = lazyRemote(() => import("tanstack_vite_remote/StatusCard"));
+const RemoteRouterCard = lazyRemote(() => import("tanstack_vite_remote/RouterCard"));
 const RsbuildStatusCard = lazyRemote(() => import("tanstack_rsbuild_remote/StatusCard"));
 const RsbuildSsrStatusCard = lazyRemote(() => import("tanstack_rsbuild_ssr_remote/StatusCard"));
 
@@ -26,6 +27,7 @@ export const Route = createFileRoute("/")({
         ),
       ).then((lists) => lists.flat()),
       import("tanstack_vite_remote/StatusCard").catch(() => null),
+      import("tanstack_vite_remote/RouterCard").catch(() => null),
       import("tanstack_rsbuild_ssr_remote/StatusCard").catch(() => null),
     ]);
     return { stylesheets };
@@ -60,6 +62,10 @@ function Home() {
 
         <RemoteBoundary fallback="Loading the remote app…" name="Vite remote">
           <RemoteStatusCard />
+        </RemoteBoundary>
+
+        <RemoteBoundary fallback="Loading the Router-aware remote…" name="Router-aware remote">
+          <RemoteRouterCard />
         </RemoteBoundary>
 
         <RemoteBoundary fallback="Loading the Rsbuild SSR remote…" name="Rsbuild SSR remote">

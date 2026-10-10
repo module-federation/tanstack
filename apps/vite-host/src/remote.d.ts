@@ -5,6 +5,13 @@ declare module "tanstack_vite_remote/StatusCard" {
   export default StatusCard;
 }
 
+declare module "tanstack_vite_remote/RouterCard" {
+  import type { ComponentType } from "react";
+
+  const RouterCard: ComponentType;
+  export default RouterCard;
+}
+
 declare module "tanstack_rsbuild_remote/StatusCard" {
   import type { ComponentType } from "react";
 

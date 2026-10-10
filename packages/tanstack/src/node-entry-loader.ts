@@ -1,10 +1,23 @@
 import type { ModuleFederation, ModuleFederationRuntimePlugin } from "@module-federation/runtime";
+import { tanstackStartSharedPackages } from "./shared";
 
 type LoadEntryArgs = Parameters<NonNullable<ModuleFederationRuntimePlugin["loadEntry"]>>[0];
 type RemoteEntryExports = NonNullable<LoadEntryArgs["remoteEntryExports"]>;
 type RemoteInfo = LoadEntryArgs["remoteInfo"];
 type FederationHost = LoadEntryArgs["origin"];
 type NodeModule = typeof import("node:module");
+type RuntimeShareConfig = {
+  requiredVersion: false | string;
+  eager?: boolean;
+  singleton?: boolean;
+  strictVersion?: boolean;
+  layer?: string | null;
+};
+
+const tanstackStartResolutionPackages = [
+  "@tanstack/react-start",
+  ...tanstackStartSharedPackages,
+] as const;
 
 export interface NodeEntryLoaderOptions {
   /** Re-check manifest/server entries after this many milliseconds. Omit to cache until exit. */
@@ -41,9 +54,12 @@ export class RemoteEntryError extends Error {
  * - CommonJS containers (Rsbuild remotes) are fetched and compiled here as CommonJS
  *   modules, so their own `import()` calls work. Module Federation's default Node loader
  *   evaluates them with `vm`, which Rsbuild's development runner cannot support.
- * - ES module entries (Vite remotes) go to `@module-federation/vite`'s SSR loader, which
- *   handles both production builds and Vite dev servers. It is loaded with Node's
- *   `require`, not the bundle's, so its `import()` calls work in Rsbuild's runner too.
+ * - ES module entries (Vite remotes) use `@module-federation/vite`'s SSR loader in production.
+ *   Vite 8 dev entries use the same ModuleRunner protocol with a host-aware transport, because
+ *   TanStack Start's dev server exposes its SSR entry through the client environment and would
+ *   otherwise evaluate optimized React and Router dependencies locally.
+ *   The loader is loaded with Node's `require`, not the bundle's, so its `import()` calls work
+ *   in Rsbuild's runner too.
  */
 export default function nodeEntryLoaderPlugin(
   options: NodeEntryLoaderOptions = {},
@@ -55,6 +71,10 @@ export default function nodeEntryLoaderPlugin(
   return {
     name: "tanstack-start-node-entry-loader",
     ...revalidationHooks,
+    apply(origin) {
+      if (!isNodeServer()) return;
+      registerNodeSharedModules(origin);
+    },
     async loadEntry(args) {
       const { remoteInfo } = args;
       if (!isNodeServer() || !/^https?:\/\//.test(remoteInfo.entry)) return undefined;
@@ -93,6 +113,49 @@ function appRequires() {
   return [path.join(process.cwd(), "package.json"), process.argv[1]]
     .filter((base): base is string => Boolean(base))
     .map((base) => createRequire(base));
+}
+
+type ResolvedPackage = { path: string; require: NodeJS.Require };
+
+function resolvePackage(
+  specifier: string,
+  requires: NodeJS.Require[],
+): ResolvedPackage | undefined {
+  for (const require of requires) {
+    const resolved = resolveFromRequire(specifier, require);
+    if (resolved) return { path: resolved, require };
+  }
+
+  // pnpm can place a transitive shared dependency below the package that imports it. In that
+  // case resolving from the app root fails even though the package is part of the app's graph.
+  // Resolve through TanStack Start's package roots before giving up.
+  for (const parentPackage of tanstackStartResolutionPackages) {
+    for (const appRequire of requires) {
+      const parent = resolvePackageRoot(parentPackage, appRequire);
+      if (!parent) continue;
+
+      const parentRequire = nodeModule().createRequire(parent);
+      const resolved = resolveFromRequire(specifier, parentRequire);
+      if (resolved) return { path: resolved, require: parentRequire };
+    }
+  }
+
+  return undefined;
+}
+
+function resolveFromRequire(specifier: string, require: NodeJS.Require) {
+  try {
+    return require.resolve(specifier);
+  } catch {
+    return undefined;
+  }
+}
+
+function resolvePackageRoot(specifier: string, require: NodeJS.Require) {
+  return (
+    resolveFromRequire(specifier, require) ??
+    resolveFromRequire(`${specifier}/package.json`, require)
+  );
 }
 
 async function loadCommonJsEntry(
@@ -192,6 +255,66 @@ type ViteLoader = {
 
 const viteLoaders = new WeakMap<ModuleFederation, ViteLoader>();
 
+function registerNodeSharedModules(origin: FederationHost) {
+  const requires = appRequires();
+  const shared: Record<
+    string,
+    {
+      version: string;
+      lib: () => any;
+      loaded: true;
+      scope?: string | string[];
+      shareConfig: RuntimeShareConfig;
+    }
+  > = {};
+
+  for (const packageName of tanstackStartSharedPackages) {
+    const resolved = resolvePackage(packageName, requires);
+    if (!resolved) continue;
+
+    const version = readPackageVersion(resolved.path, packageName);
+    if (!version) continue;
+
+    const configured = origin.options.shared[packageName]?.[0] as
+      { scope?: string | string[]; shareConfig?: Record<string, unknown> } | undefined;
+    shared[packageName] = {
+      version,
+      lib: () => resolved.require(resolved.path),
+      loaded: true,
+      scope: configured?.scope,
+      shareConfig: {
+        eager: true,
+        singleton: true,
+        requiredVersion: version,
+        ...configured?.shareConfig,
+      } as RuntimeShareConfig,
+    };
+  }
+
+  if (Object.keys(shared).length > 0) origin.registerShared(shared);
+}
+
+function readPackageVersion(filename: string, packageName: string) {
+  const path = process.getBuiltinModule("node:path") as typeof import("node:path");
+  const fs = process.getBuiltinModule("node:fs") as typeof import("node:fs");
+  let directory = path.dirname(filename);
+
+  while (true) {
+    try {
+      const packageJson = JSON.parse(
+        fs.readFileSync(path.join(directory, "package.json"), "utf8"),
+      ) as { name?: string; version?: string };
+      if (packageJson.name === packageName) return packageJson.version;
+    } catch {
+      // Continue walking toward the application root.
+    }
+
+    const parent = path.dirname(directory);
+    if (parent === directory) return undefined;
+    directory = parent;
+  }
+}
+
 async function loadModuleEntry(args: LoadEntryArgs, options: NodeEntryLoaderOptions) {
   const { entry, name } = args.remoteInfo;
   let viteLoader = viteLoaders.get(args.origin);
@@ -204,7 +327,10 @@ async function loadModuleEntry(args: LoadEntryArgs, options: NodeEntryLoaderOpti
 
   let remoteEntry: RemoteEntryExports | void;
   try {
-    remoteEntry = await viteLoader.plugin.loadEntry?.(args);
+    const devEntry = resolveViteDevEntry(entry);
+    remoteEntry = devEntry
+      ? await loadViteDevEntry(devEntry, viteLoader)
+      : await viteLoader.plugin.loadEntry?.(args);
   } catch (cause) {
     const { httpError } = viteLoader;
     throw new RemoteEntryError(
@@ -239,23 +365,108 @@ async function loadModuleEntry(args: LoadEntryArgs, options: NodeEntryLoaderOpti
   return remoteEntry;
 }
 
+type ViteModuleRunner = { import<T>(url: string): Promise<T> };
+
+const viteDevRunners = new Map<string, Promise<ViteModuleRunner>>();
+
+/** Uses the Vite 8 runner protocol for TanStack Start's development SSR entries. */
+function resolveViteDevEntry(entry: string) {
+  return entry.includes("/__mf_ssr__/") ? entry : undefined;
+}
+
+async function loadViteDevEntry(
+  entry: string,
+  loader: ViteLoader,
+): Promise<RemoteEntryExports | void> {
+  const remoteOrigin = new URL(entry).origin;
+  const runnerKey = `${remoteOrigin}:${JSON.stringify(loader.resolvedShared)}`;
+  let runner = viteDevRunners.get(runnerKey);
+  if (!runner) {
+    runner = createViteDevRunner(remoteOrigin, loader);
+    viteDevRunners.set(runnerKey, runner);
+  }
+  return runner
+    .then((module) => module.import<RemoteEntryExports>(new URL(entry).pathname))
+    .catch((error: unknown) => {
+      if (viteDevRunners.get(runnerKey) === runner) viteDevRunners.delete(runnerKey);
+      throw error;
+    });
+}
+
+async function createViteDevRunner(
+  remoteOrigin: string,
+  loader: ViteLoader,
+): Promise<ViteModuleRunner> {
+  const { ModuleRunner, ESModulesEvaluator } = loader.require("vite/module-runner") as {
+    ModuleRunner: new (
+      options: {
+        hmr: false;
+        transport: { invoke(payload: unknown): Promise<unknown> };
+      },
+      evaluator: unknown,
+    ) => ViteModuleRunner;
+    ESModulesEvaluator: new () => unknown;
+  };
+  const runnerEndpoint = `${remoteOrigin}/__mf_runner__`;
+  const pathToFileURL = (process.getBuiltinModule("node:url") as typeof import("node:url"))
+    .pathToFileURL;
+
+  return new ModuleRunner(
+    {
+      hmr: false,
+      transport: {
+        async invoke(payload: unknown) {
+          const response = await fetch(runnerEndpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+          });
+          const result = await response.json();
+          const data = payload as {
+            data?: { data?: [string]; name?: string };
+          };
+          const id = data.data?.data?.[0];
+          const sharedPath =
+            data.data?.name === "fetchModule" && id
+              ? resolveViteSharedPath(id, loader.resolvedShared)
+              : undefined;
+          if (sharedPath) {
+            return {
+              result: { externalize: pathToFileURL(sharedPath).href, type: "module" },
+            };
+          }
+          return result;
+        },
+      },
+    },
+    new ESModulesEvaluator(),
+  );
+}
+
+function resolveViteSharedPath(id: string, resolvedShared: Record<string, string>) {
+  const cleanId = id.split("?", 1)[0] ?? id;
+  for (const [packageName, filename] of Object.entries(resolvedShared).sort(
+    ([left], [right]) => right.length - left.length,
+  )) {
+    if (
+      cleanId === packageName ||
+      cleanId.startsWith(`${packageName}/`) ||
+      cleanId.includes(`/node_modules/.vite/deps/${packageName.replaceAll("/", "_")}`)
+    ) {
+      return filename;
+    }
+  }
+  return undefined;
+}
+
 function createViteLoader(
   { origin, remoteInfo }: LoadEntryArgs,
   options: NodeEntryLoaderOptions,
 ): ViteLoader {
   const requires = appRequires();
-  const resolve = (specifier: string) => {
-    for (const require of requires) {
-      try {
-        return { path: require.resolve(specifier), require };
-      } catch {
-        // Try the next base.
-      }
-    }
-    return undefined;
-  };
 
-  const loader = resolve("@module-federation/vite/ssrEntryLoader");
+  const loader = resolvePackage("@module-federation/vite/ssrEntryLoader", requires);
   if (!loader) {
     throw new RemoteEntryError(
       `Remote "${remoteInfo.name}" is a Vite remote. Add @module-federation/vite to the ` +
@@ -266,10 +477,9 @@ function createViteLoader(
 
   const resolvedShared: Record<string, string> = {};
   for (const specifier of [...VITE_SHARED_PACKAGES, ...Object.keys(origin.options.shared)]) {
-    const resolved = resolve(specifier);
+    const resolved = resolvePackage(specifier, requires);
     if (resolved) resolvedShared[specifier] = resolved.path;
   }
-
   // The loader is an ES module; Node 22.12+ requires it synchronously.
   const loaderModule = loader.require(loader.path) as ViteSsrEntryLoaderModule;
   return {
@@ -393,9 +603,9 @@ function invalidateRemote(
 
 /**
  * Vite remotes can import shared packages from node_modules instead of the share scope:
- * a Vite dev server's module runner externalizes them, and resolved imports in production
- * builds point there. The host bundles its own copies, so this registers them in Node's
- * module cache under their node_modules paths. The process then keeps one React.
+ * the Vite dev transport and the production loader both resolve them to the host's files.
+ * Registering those files in Node's module cache and Vite's shared-module cache keeps one
+ * instance of every configured package, including the React and Router runtimes.
  */
 function provideHostModules(
   origin: FederationHost,
@@ -405,21 +615,59 @@ function provideHostModules(
   const Module = nodeModule() as unknown as new (id: string) => CompilableModule & {
     loaded: boolean;
   };
-  for (const scope of Object.values(origin.shareScopeMap)) {
+  for (const [scopeName, scope] of Object.entries(origin.shareScopeMap)) {
     for (const [packageName, versions] of Object.entries(scope)) {
-      const filename = resolvedShared[packageName];
-      // Something already loaded this package from node_modules; nothing to align.
-      if (!filename || require.cache[filename]) continue;
       const provided = Object.values(versions).find(
         (shared) => shared.from === origin.name && shared.loaded && shared.lib,
       );
       if (!provided?.lib) continue;
 
+      const sharedModule = provided.lib();
+      provideViteSharedModule(scopeName, packageName, sharedModule);
+      const filename =
+        resolvedShared[packageName] ?? findCachedModuleFilename(sharedModule, require);
+      if (filename) resolvedShared[packageName] ??= filename;
+
+      // Something already loaded this package from node_modules; nothing else to align.
+      if (!filename || require.cache[filename]) continue;
+
       const cached = new Module(filename);
       cached.filename = filename;
-      cached.exports = provided.lib();
+      cached.exports = sharedModule;
       cached.loaded = true;
       require.cache[filename] = cached as unknown as NodeJS.Module;
     }
+  }
+}
+
+function findCachedModuleFilename(exports: unknown, require: NodeJS.Require) {
+  const cache = (require as NodeJS.Require & { cache: Record<string, NodeJS.Module> }).cache;
+  for (const [filename, cached] of Object.entries(cache)) {
+    if (cached?.exports === exports) return filename;
+  }
+  return undefined;
+}
+
+type ViteModuleCache = {
+  share?: Record<string, unknown>;
+};
+
+type ViteModuleCacheGlobals = typeof globalThis & {
+  __mf_module_cache__?: ViteModuleCache;
+  __mf_module_cache_react_server__?: ViteModuleCache;
+};
+
+/**
+ * Vite's dev ModuleRunner consults this cache before falling back to its own optimized
+ * dependency graph. Seed it with the host's already-loaded singleton so a Vite SSR remote
+ * cannot create a second React or Router context in the same server process.
+ */
+function provideViteSharedModule(scopeName: string, packageName: string, module: unknown) {
+  const globalState = globalThis as ViteModuleCacheGlobals;
+  for (const cacheKey of ["__mf_module_cache__", "__mf_module_cache_react_server__"] as const) {
+    const cache = (globalState[cacheKey] ??= {});
+    const share = (cache.share ??= {});
+    share[`${scopeName}:${packageName}`] ??= module;
+    if (scopeName === "default") share[packageName] ??= module;
   }
 }

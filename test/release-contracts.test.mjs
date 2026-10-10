@@ -56,6 +56,10 @@ test("applies TanStack-safe defaults", () => {
   assert.equal(options.shared.react.shareConfig.singleton, true);
   assert.equal(options.shared.react.shareConfig.eager, false, "remote-only builds stay lazy");
   assert.equal(options.shared["react-dom"].shareConfig.singleton, true);
+  for (const dependency of ["@tanstack/react-router", "@tanstack/router-core"]) {
+    assert.equal(options.shared[dependency].shareConfig.singleton, true);
+    assert.equal(options.shared[dependency].shareConfig.eager, false);
+  }
 });
 
 test("Vite hosts provide their own React eagerly so remotes cannot replace it", () => {
@@ -63,9 +67,15 @@ test("Vite hosts provide their own React eagerly so remotes cannot replace it", 
     name: "host",
     remotes: { remote: { type: "module", name: "remote", entry: "remoteEntry.js" } },
   });
-  for (const dependency of ["react", "react-dom"]) {
+  for (const dependency of [
+    "react",
+    "react-dom",
+    "@tanstack/react-router",
+    "@tanstack/router-core",
+  ]) {
     assert.equal(options.shared[dependency].shareConfig.singleton, true);
     assert.equal(options.shared[dependency].shareConfig.eager, true, `${dependency} is eager`);
+    assert.notEqual(options.shared[dependency].shareConfig.import, false);
   }
 
   const overridden = upstreamOptions({
@@ -92,6 +102,17 @@ test("Vite hosts preserve SSR entry-loader revalidation options", () => {
     maxAgeMs: 1000,
     strategy: "vm",
   });
+});
+
+test("Vite hybrids keep host shares eager while preserving remote exposes", () => {
+  const options = upstreamOptions({
+    name: "hybrid",
+    exposes: { "./Card": "./src/Card.tsx" },
+    remotes: { remote: { type: "module", name: "remote", entry: "remoteEntry.js" } },
+  });
+  assert.ok(options.exposes["./Card"]);
+  assert.equal(options.shared.react.shareConfig.eager, true);
+  assert.equal(options.shared["@tanstack/react-router"].shareConfig.eager, true);
 });
 
 test("preserves explicit federation settings and shared entries", () => {
@@ -127,7 +148,13 @@ test("does not mutate the caller's options", () => {
 
 test("accepts the upstream array form", () => {
   const options = upstreamOptions({ name: "remote", shared: ["lodash", "react"] });
-  assert.deepEqual(Object.keys(options.shared).sort(), ["lodash", "react", "react-dom"]);
+  assert.deepEqual(Object.keys(options.shared).sort(), [
+    "@tanstack/react-router",
+    "@tanstack/router-core",
+    "lodash",
+    "react",
+    "react-dom",
+  ]);
   assert.equal(options.shared.react.shareConfig.singleton, true);
   assert.equal(options.shared["react-dom"].shareConfig.singleton, true);
 });
@@ -162,6 +189,8 @@ test("Rsbuild shared defaults never mutate caller overrides", () => {
   assert.deepEqual(callerShared, before);
   assert.deepEqual(shared.react, { eager: false, singleton: false });
   assert.deepEqual(shared["react-dom"], { eager: true, singleton: true });
+  assert.deepEqual(shared["@tanstack/react-router"], { eager: true, singleton: true });
+  assert.deepEqual(shared["@tanstack/router-core"], { eager: true, singleton: true });
 });
 
 const rsbuildRemote = { name: "test_remote", exposes: { "./Card": "./src/Card.tsx" } };
@@ -177,14 +206,57 @@ test("Rsbuild hosts share eager React; remotes and server containers stay lazy",
     server: true,
   });
 
-  for (const options of [hostClient, hostServer]) {
-    assert.deepEqual(options.shared.react, { eager: true, singleton: true });
-    assert.deepEqual(options.shared["react-dom"], { eager: true, singleton: true });
+  for (const [options, server] of [
+    [hostClient, false],
+    [hostServer, true],
+  ]) {
+    for (const dependency of [
+      "react",
+      "react-dom",
+      "@tanstack/react-router",
+      "@tanstack/router-core",
+    ]) {
+      assert.deepEqual(options.shared[dependency], {
+        ...(server ? { import: false } : {}),
+        eager: true,
+        singleton: true,
+      });
+    }
   }
   for (const options of [remoteClient, remoteContainer]) {
-    assert.deepEqual(options.shared.react, { singleton: true });
-    assert.deepEqual(options.shared["react-dom"], { singleton: true });
+    for (const dependency of [
+      "react",
+      "react-dom",
+      "@tanstack/react-router",
+      "@tanstack/router-core",
+    ]) {
+      assert.deepEqual(options.shared[dependency], { singleton: true });
+    }
   }
+});
+
+test("Rsbuild SSR preserves explicit shared import and scope settings", () => {
+  const [, server] = federationOptions({
+    federation: {
+      ...rsbuildHost,
+      shared: {
+        react: "preact/compat",
+        "@tanstack/react-router": {
+          singleton: true,
+          shareKey: "router",
+          shareScope: "custom",
+        },
+        lodash: { import: "lodash-es", singleton: true },
+      },
+    },
+    server: true,
+  });
+
+  assert.equal(server.shared.react.import, "preact/compat");
+  assert.equal(server.shared["@tanstack/react-router"].import, false);
+  assert.equal(server.shared["@tanstack/react-router"].shareKey, "router");
+  assert.equal(server.shared["@tanstack/react-router"].shareScope, "custom");
+  assert.deepEqual(server.shared.lodash, { import: "lodash-es", singleton: true });
 });
 
 test("Rsbuild enables async startup unless the caller disables it", () => {

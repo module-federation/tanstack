@@ -53,10 +53,11 @@ Defaults:
 
 - `filename: "remoteEntry.js"`, `manifest: true`, and
   `hostInitInjectLocation: "entry"`.
-- `react` and `react-dom` are shared singletons. When the config declares
-  `remotes`, they are also `eager`, so the host's own React stays in the share
-  scope and a remote built by another bundler cannot replace it. Remote-only
-  builds stay lazy.
+- `react`, `react-dom`, `@tanstack/react-router`, and `@tanstack/router-core`
+  are shared singletons. When the config declares `remotes`, they are also
+  `eager`, so the host's own React and Router runtimes stay in the share scope
+  and a remote built by another bundler cannot replace them. Remote-only builds
+  stay lazy.
 - Any entry you pass in `shared` replaces the default for that package.
 
 A Vite host renders before lazy shared modules resolve, so mark any other shared
@@ -129,8 +130,9 @@ can be consumed by Vite and Rsbuild hosts.
 
 Defaults:
 
-- `react` and `react-dom` are shared singletons, `eager` for hosts (configs with
-  `remotes`) and lazy for remote-only builds.
+- `react`, `react-dom`, `@tanstack/react-router`, and `@tanstack/router-core`
+  are shared singletons, `eager` for hosts (configs with `remotes`) and lazy
+  for remote-only builds.
 - `experiments.asyncStartup: true`, so entries wait for shared modules before
   running. Pass `experiments: { asyncStartup: false }` to opt out.
 - A remote's browser build uses `publicPath: "auto"`, so hosts on other origins
