@@ -14,7 +14,9 @@ export default defineConfig({
         dts: false,
         name: "tanstack_rsbuild_ssr_host",
         // Workspace dependencies declare "workspace:*", which is not a semver range.
-        shared: { "example-host-context": { requiredVersion: "*", singleton: true } },
+        shared: {
+          "example-host-context": { requiredVersion: "*", singleton: true },
+        },
         shareStrategy: "loaded-first",
         remotes: {
           tanstack_rsbuild_ssr_remote:

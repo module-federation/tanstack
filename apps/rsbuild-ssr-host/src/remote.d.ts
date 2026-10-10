@@ -11,3 +11,10 @@ declare module "tanstack_vite_remote/StatusCard" {
   const StatusCard: ComponentType;
   export default StatusCard;
 }
+
+declare module "tanstack_vite_remote/RouterCard" {
+  import type { ComponentType } from "react";
+
+  const RouterCard: ComponentType;
+  export default RouterCard;
+}

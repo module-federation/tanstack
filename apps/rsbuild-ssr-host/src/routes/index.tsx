@@ -6,6 +6,7 @@ import { RemoteBoundary } from "../components/RemoteBoundary";
 // outage renders the remote once it is back.
 const RsbuildStatusCard = lazyRemote(() => import("tanstack_rsbuild_ssr_remote/StatusCard"));
 const ViteStatusCard = lazyRemote(() => import("tanstack_vite_remote/StatusCard"));
+const ViteRouterCard = lazyRemote(() => import("tanstack_vite_remote/RouterCard"));
 
 // Manifests of the remotes this route renders on the server.
 const serverRenderedManifests = [
@@ -25,6 +26,7 @@ export const Route = createFileRoute("/")({
       ).then((lists) => lists.flat()),
       import("tanstack_rsbuild_ssr_remote/StatusCard").catch(() => null),
       import("tanstack_vite_remote/StatusCard").catch(() => null),
+      import("tanstack_vite_remote/RouterCard").catch(() => null),
     ]);
     return { stylesheets };
   },
@@ -50,6 +52,9 @@ function Home() {
         </RemoteBoundary>
         <RemoteBoundary fallback="Loading the Vite remote…" name="Vite remote">
           <ViteStatusCard />
+        </RemoteBoundary>
+        <RemoteBoundary fallback="Loading the Router-aware remote…" name="Router-aware remote">
+          <ViteRouterCard />
         </RemoteBoundary>
       </div>
     </main>
