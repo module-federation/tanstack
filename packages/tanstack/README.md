@@ -63,6 +63,22 @@ A Vite host renders before lazy shared modules resolve, so mark any other shared
 package the host imports from its entry or root route as `eager: true`, as the
 wrapper does for React. Remotes can keep their shares lazy.
 
+For a Vite host, configure SSR entry revalidation directly with the Vite
+option:
+
+```ts
+tanstackStartModuleFederation({
+  name: "host",
+  ssrEntryLoader: { maxAgeMs: 30_000 },
+  // ...remotes and shared options
+});
+```
+
+Vite's `maxAgeMs` revalidation is version-aware when the remote is resolved
+from an `mf-manifest.json`. Convention-resolved or direct server-entry URLs do
+not provide a remote version; use a manifest URL or call the Vite loader's
+explicit `revalidate()` when those URLs must be refreshed.
+
 The wrapper omits the global Module Federation `target` option. TanStack
 Start's client and SSR environments need `@module-federation/vite` to select
 `web` and `node` independently.
@@ -150,6 +166,43 @@ Pass `server: true` (or an options object) to federate on the server:
 When a remote's server entry cannot load, the host's runtime plugin throws a
 `RemoteEntryError` whose `phase` is `fetch`, `evaluate`, or `loader` and whose
 `cause` is the original error.
+
+Server entries are cached for the lifetime of the Node process by default. To
+pick up a rebuilt remote while keeping the process running, configure the
+revalidation window on an Rsbuild host:
+
+```ts
+tanstackStartModuleFederation({
+  federation: {
+    name: "host",
+    remotes: {
+      remote: "remote@https://example.test/mf-manifest.json",
+    },
+  },
+  server: {
+    ssrEntryLoader: {
+      maxAgeMs: 30_000,
+    },
+  },
+});
+```
+
+For an Rsbuild host, when `maxAgeMs` expires, the adapter invalidates the
+Module Federation remote container cache. Vite remotes also invalidate the Vite
+SSR entry-loader cache; the option is forwarded to that loader. `strategy` and
+`fetchMaxBytes` apply to Vite SSR entries, while `fetchTimeoutMs` applies to
+both Vite and CommonJS server-entry requests. Set either limit to `0` to
+disable it. Concurrent requests for an expired remote share one revalidation
+request on this adapter path.
+
+Revalidation makes subsequent loads use the new remote entry and exposed
+modules, but does not safely replace already loaded process-level shared
+singletons such as React. Restart the host process after changing a shared
+singleton's version or implementation. For Rsbuild/CommonJS remotes,
+expiration also re-evaluates the downloaded server entry with a forced
+container re-registration. Module-scope side effects in a remote (for example
+timers or process listeners) are not automatically disposed, so use
+revalidation only for remotes whose evaluation is safe to repeat.
 
 ## Rendering remotes on the server
 

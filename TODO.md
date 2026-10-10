@@ -145,7 +145,15 @@ Fixed upstream in `@module-federation/vite` 1.23.3:
       the host, and prove no stale container or shared module is served.
       `@module-federation/vite` has `revalidate()` and `maxAgeMs` for its own
       loader; the Module Federation runtime caches containers for the life of
-      the process.
+      the process. Server-entry revalidation is now available for Vite hosts
+      through `ssrEntryLoader.maxAgeMs` and for Rsbuild hosts through
+      `server.ssrEntryLoader.maxAgeMs`. For Vite's native loader, a manifest
+      provides the version needed for automatic change detection; direct or
+      convention-resolved server-entry URLs need an explicit `revalidate()` for
+      forced refresh. Shared-singleton changes still require a host restart, so
+      the shared-module portion remains open. Remote module-scope side effects
+      are not automatically disposed during revalidation and remain the
+      application's responsibility.
 - [ ] Test cyclic imports across chunks in a server remote graph.
 - [ ] In development, a Vite remote's server modules import React from the files
       its dev server resolves, so host and remote must resolve React to the
