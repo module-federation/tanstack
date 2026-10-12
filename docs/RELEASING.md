@@ -4,16 +4,22 @@ summary: Release and trusted npm publishing for @module-federation/tanstack.
 read_when:
   - Preparing a release
   - Updating release automation
-updated_at: 2026-10-07
+updated_at: 2026-10-12
 ---
 
 # Releasing
 
-Add a Changeset to every user-visible package change:
+Releases are cut by [release-please](https://github.com/googleapis/release-please)
+from Conventional Commits on `main`. PRs are squash-merged with the PR title as
+the commit message, and `Validate PR title` enforces the format, so the PR title
+decides the release:
 
-```bash
-pnpm changeset
-```
+- `fix:` (and `perf:`) releases a patch.
+- `feat:` releases a minor.
+- `feat!:` or a `BREAKING CHANGE:` footer releases a minor while the package is
+  below 1.0 (`bump-minor-pre-major`), then a major.
+- `chore:`, `docs:`, `test:`, `ci:`, `refactor:`, and `build:` release nothing
+  and stay out of the changelog.
 
 Run the complete local gate before merging:
 
@@ -26,11 +32,23 @@ pnpm test
 pnpm pack:tanstack
 ```
 
-The `Release Pull Request` workflow versions the package and updates its
-changelog. After merging that PR, publish from `main` with a GitHub Release
-whose tag exactly matches `packages/tanstack/package.json` (without a `v`), or
-dispatch `Release` with `version=latest`. Preview dispatches use `version=next`
-and publish to npm's `next` dist-tag.
+On every push to `main`, the `Release Please` workflow opens or updates a
+`chore: release <version>` PR that bumps `packages/tanstack/package.json`,
+`.release-please-manifest.json`, and `packages/tanstack/CHANGELOG.md`. Edit the
+PR's changelog entry before merging if the commit titles need context. To force
+a version, add a `Release-As: x.y.z` footer to a commit on `main`.
+
+Merging the release PR makes release-please tag the merge commit and publish a
+GitHub Release named after the version, without a `v` (`0.1.1`, not `v0.1.1`).
+That release triggers `Release`, which publishes to npm under `latest`.
+release-please authenticates with `REPO_SCOPED_TOKEN`, a token with contents and
+pull-request write access: releases created with the default `GITHUB_TOKEN`
+would not trigger the publish workflow.
+
+Preview dispatches of `Release` with `version=next` publish the next patch
+version with a `-next.<run id>` suffix to npm's `next` dist-tag. Dispatching with
+`version=latest` republishes the committed version and is only needed when a
+release-triggered publish failed.
 
 GitHub prerelease tags must match the prerelease version already committed in
 `packages/tanstack/package.json`. The workflow publishes that exact version to

@@ -1,0 +1,29 @@
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      # Releases created with GITHUB_TOKEN do not trigger other workflows, so the
+      # repository token is what lets a published release start release.yml.
+      - name: Validate release token
+        env:
+          REPO_SCOPED_TOKEN: ${{ secrets.REPO_SCOPED_TOKEN }}
+        run: test -n "$REPO_SCOPED_TOKEN" || { echo "REPO_SCOPED_TOKEN is required."; exit 1; }
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.REPO_SCOPED_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

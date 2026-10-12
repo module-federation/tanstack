@@ -182,5 +182,5 @@ Fixed upstream in `@module-federation/vite` 1.23.3:
 
 - [ ] Update the support table only after the combination passes the
       development and production scenarios on every supported Node line.
-- [ ] Add a Changeset and list the tested bundler and Node versions in the
-      release notes.
+- [ ] Land it as a `feat:` or `fix:` commit and list the tested bundler and
+      Node versions in the release PR notes.

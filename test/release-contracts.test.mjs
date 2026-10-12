@@ -24,6 +24,16 @@ const rootPackageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf
 const ciWorkflow = readFileSync(join(root, ".github", "workflows", "ci.yml"), "utf8");
 const previewWorkflow = readFileSync(join(root, ".github", "workflows", "pkg-pr-new.yml"), "utf8");
 const releaseWorkflow = readFileSync(join(root, ".github", "workflows", "release.yml"), "utf8");
+const releasePleaseWorkflow = readFileSync(
+  join(root, ".github", "workflows", "release-please.yml"),
+  "utf8",
+);
+const releasePleaseConfig = JSON.parse(
+  readFileSync(join(root, "release-please-config.json"), "utf8"),
+);
+const releasePleaseManifest = JSON.parse(
+  readFileSync(join(root, ".release-please-manifest.json"), "utf8"),
+);
 const { tanstackStartModuleFederation } = await import(
   pathToFileURL(join(packageRoot, "dist", "index.js")).href
 );
@@ -615,4 +625,30 @@ test("npm publications share one package-wide concurrency queue", () => {
 test("first package preview does not require an existing npm release", () => {
   assert.match(previewWorkflow, /pkg-pr-new@0\.0\.54 publish \.\/packages\/tanstack/);
   assert.doesNotMatch(previewWorkflow, /--compact/);
+});
+
+test("release-please tags the version the publish workflow validates", () => {
+  assert.deepEqual(Object.keys(releasePleaseConfig.packages), ["packages/tanstack"]);
+  assert.equal(releasePleaseConfig.packages["packages/tanstack"]["package-name"], packageJson.name);
+  assert.equal(releasePleaseConfig["release-type"], "node");
+  // release.yml requires the tag to equal the package version, without a `v` or component.
+  assert.equal(releasePleaseConfig["include-v-in-tag"], false);
+  assert.equal(releasePleaseConfig["include-component-in-tag"], false);
+  assert.match(releaseWorkflow, /Tags must not start with v/);
+  assert.equal(releasePleaseManifest["packages/tanstack"], packageJson.version);
+});
+
+test("release-please output passes the format gate in release PRs and publishes", () => {
+  // release-please writes `*` bullets and blank-line runs that Prettier rewrites.
+  const prettierIgnore = readFileSync(join(root, ".prettierignore"), "utf8").split("\n");
+  assert.ok(prettierIgnore.includes("packages/tanstack/CHANGELOG.md"));
+  assert.ok(prettierIgnore.includes(".release-please-manifest.json"));
+});
+
+test("release-please releases trigger the trusted publish workflow", () => {
+  // Releases created with GITHUB_TOKEN do not start other workflows.
+  assert.match(releasePleaseWorkflow, /token: \$\{\{ secrets\.REPO_SCOPED_TOKEN \}\}/);
+  assert.match(releaseWorkflow, /release:\n\s+types: \[published\]/);
+  assert.doesNotMatch(releaseWorkflow, /changeset/i);
+  assert.equal(existsSync(join(root, ".changeset")), false);
 });

@@ -3,3 +3,6 @@ node_modules
 pnpm-lock.yaml
 .turbo
 **/routeTree.gen.ts
+# Written by release-please
+packages/tanstack/CHANGELOG.md
+.release-please-manifest.json

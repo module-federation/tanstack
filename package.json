@@ -15,12 +15,9 @@
     "format:check": "prettier --check .",
     "pack:tanstack": "pnpm --filter @module-federation/tanstack pack:dry",
     "start": "pnpm build:package && turbo run start",
-    "preview": "pnpm build && turbo run preview",
-    "changeset": "changeset",
-    "changeset:status": "changeset status"
+    "preview": "pnpm build && turbo run preview"
   },
   "devDependencies": {
-    "@changesets/cli": "3.0.3",
     "playwright": "1.63.0",
     "prettier": "3.9.9",
     "turbo": "2.11.7",

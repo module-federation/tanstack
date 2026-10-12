@@ -57,10 +57,9 @@ jobs:
       - name: Generate preview version
         if: github.event_name == 'workflow_dispatch' && inputs.version == 'next'
         run: |
-          pnpm changeset version --snapshot next
-          SNAPSHOT_VERSION="$(node -p "require('./packages/tanstack/package.json').version")"
-          BASE_VERSION="${SNAPSHOT_VERSION%%-*}"
-          npm pkg set version="${BASE_VERSION}-next.${GITHUB_RUN_ID}" --prefix packages/tanstack
+          BASE_VERSION="$(node -p "require('./packages/tanstack/package.json').version.split('-')[0]")"
+          IFS=. read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
+          npm pkg set version="${MAJOR}.${MINOR}.$((PATCH + 1))-next.${GITHUB_RUN_ID}" --prefix packages/tanstack
       - run: pnpm format:check
       - run: pnpm typecheck
       - run: pnpm build
