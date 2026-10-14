@@ -663,7 +663,7 @@ test("CI uses Node versions supported by the package build toolchain", () => {
   const supportedNode = "^22.18.0 || ^24.11.0 || >=26.0.0";
   assert.equal(rootPackageJson.engines.node, supportedNode);
   assert.equal(packageJson.engines.node, supportedNode);
-  assert.match(ciWorkflow, /node: \["22\.18\.0", "24", "26"\]/);
+  assert.match(ciWorkflow, /node: \["24", "26"\]/);
   assert.doesNotMatch(ciWorkflow, /22\.12\.0/);
 });
 
@@ -718,8 +718,9 @@ test("release-please output passes the format gate in release PRs and publishes"
 });
 
 test("release-please releases trigger the trusted publish workflow", () => {
-  // Releases created with GITHUB_TOKEN do not start other workflows.
-  assert.match(releasePleaseWorkflow, /token: \$\{\{ secrets\.REPO_SCOPED_TOKEN \}\}/);
+  // Releases created with GITHUB_TOKEN do not start other workflows, so release-please uses an app token.
+  assert.match(releasePleaseWorkflow, /uses: actions\/create-github-app-token@/);
+  assert.match(releasePleaseWorkflow, /token: \$\{\{ steps\.app-token\.outputs\.token \}\}/);
   assert.match(releaseWorkflow, /release:\n\s+types: \[published\]/);
   assert.doesNotMatch(releaseWorkflow, /changeset/i);
   assert.equal(existsSync(join(root, ".changeset")), false);
