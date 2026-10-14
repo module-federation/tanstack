@@ -16,14 +16,21 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
-      # Releases created with GITHUB_TOKEN do not trigger other workflows, so the
-      # repository token is what lets a published release start release.yml.
-      - name: Validate release token
-        env:
-          REPO_SCOPED_TOKEN: ${{ secrets.REPO_SCOPED_TOKEN }}
-        run: test -n "$REPO_SCOPED_TOKEN" || { echo "REPO_SCOPED_TOKEN is required."; exit 1; }
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          token: ${{ secrets.REPO_SCOPED_TOKEN }}
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+
+      - name: Create or update release PR
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
