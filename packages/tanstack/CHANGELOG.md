@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.1](https://github.com/module-federation/tanstack/compare/0.1.0...0.1.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* **docs:** clarify SSR remote fallback behavior ([#7](https://github.com/module-federation/tanstack/issues/7)) ([2584f79](https://github.com/module-federation/tanstack/commit/2584f796729f24d2c15999f52a41c32a817c3c7a))
+* preserve Router context across SSR bundlers ([#6](https://github.com/module-federation/tanstack/issues/6)) ([2033429](https://github.com/module-federation/tanstack/commit/20334290f8a486475bc6ca7be0c0da26e2273ed8))
+* stabilize TanStack SSR remote revalidation ([#5](https://github.com/module-federation/tanstack/issues/5)) ([20e7379](https://github.com/module-federation/tanstack/commit/20e73790fa68682b659297d237f6343ea9e00c07))
+* unify Vite and Rsbuild runtime fetch policies ([#8](https://github.com/module-federation/tanstack/issues/8)) ([1b753cf](https://github.com/module-federation/tanstack/commit/1b753cf936b16d71219877480a627ca08c507730))
+
 ## 0.1.0
 
 Initial release: Module Federation for TanStack Start on Vite and Rsbuild.
