@@ -1,4 +1,7 @@
 import { createElement, lazy, type ComponentProps, type ComponentType } from "react";
+import { fetchRemoteJson, type RemoteFetchOptions } from "./remote-fetch";
+
+export type { RemoteFetchOptions } from "./remote-fetch";
 
 export type LazyRemoteOptions = {
   /** How long a failed load stays failed before a render tries again, in milliseconds. Defaults to 5 seconds. */
@@ -39,7 +42,7 @@ export function lazyRemote<T extends ComponentType<any>>(
   };
 }
 
-export type RemoteStylesheetOptions = {
+export type RemoteStylesheetOptions = RemoteFetchOptions & {
   /** How long a fetched manifest is reused, in milliseconds. Defaults to 30 seconds. */
   maxAgeMs?: number;
 };
@@ -51,7 +54,7 @@ type RemoteManifest = {
   metaData?: { publicPath?: string };
 };
 
-const manifests = new Map<string, { fetchedAt: number; manifest: Promise<RemoteManifest> }>();
+const manifests = new Map<string, ManifestCacheEntry>();
 
 /**
  * Lists the stylesheets a remote's manifest declares for an exposed module, as absolute
@@ -63,9 +66,13 @@ const manifests = new Map<string, { fetchedAt: number; manifest: Promise<RemoteM
 export async function getRemoteStylesheets(
   manifestUrl: string,
   expose: string,
-  { maxAgeMs = 30_000 }: RemoteStylesheetOptions = {},
+  { maxAgeMs = 30_000, fetchTimeoutMs, fetchMaxBytes }: RemoteStylesheetOptions = {},
 ): Promise<string[]> {
-  const manifest = await fetchManifest(manifestUrl, maxAgeMs);
+  const manifest = await fetchManifest(manifestUrl, {
+    maxAgeMs,
+    fetchTimeoutMs,
+    fetchMaxBytes,
+  });
   const name = expose.replace(/^\.\//, "");
   const exposed = manifest.exposes?.find(
     (candidate) => candidate.path === expose || candidate.name === name,
@@ -79,18 +86,32 @@ export async function getRemoteStylesheets(
   return [...new Set([...sync, ...async])].map((asset) => new URL(asset, base).href);
 }
 
-function fetchManifest(url: string, maxAgeMs: number) {
-  const cached = manifests.get(url);
-  if (cached && Date.now() - cached.fetchedAt < maxAgeMs) return cached.manifest;
+interface ManifestCacheEntry {
+  fetchedAt?: number;
+  manifest: Promise<RemoteManifest>;
+}
 
-  const manifest = fetch(url).then(async (response) => {
-    if (!response.ok) throw new Error(`${url} responded with HTTP ${response.status}.`);
-    return (await response.json()) as RemoteManifest;
-  });
-  manifests.set(url, { fetchedAt: Date.now(), manifest });
+function fetchManifest(
+  url: string,
+  { maxAgeMs = 30_000, fetchTimeoutMs, fetchMaxBytes }: RemoteStylesheetOptions,
+) {
+  const cached = manifests.get(url);
+  if (cached && (cached.fetchedAt === undefined || Date.now() - cached.fetchedAt < maxAgeMs)) {
+    return cached.manifest;
+  }
+
+  const manifest = fetchRemoteJson<RemoteManifest>(url, { fetchTimeoutMs, fetchMaxBytes });
+  const entry: ManifestCacheEntry = { manifest };
+  manifests.set(url, entry);
   // A failed fetch is not reused: the next call retries.
   manifest.catch(() => {
-    if (manifests.get(url)?.manifest === manifest) manifests.delete(url);
+    if (manifests.get(url) === entry) manifests.delete(url);
   });
+  manifest.then(
+    () => {
+      if (manifests.get(url) === entry) entry.fetchedAt = Date.now();
+    },
+    () => undefined,
+  );
   return manifest;
 }

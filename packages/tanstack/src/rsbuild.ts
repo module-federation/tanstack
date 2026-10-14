@@ -4,8 +4,8 @@ import {
   type ModuleFederationOptions,
 } from "@module-federation/rsbuild-plugin";
 import type { RsbuildPlugin } from "@rsbuild/core";
-import { defaultShared, eagerShared, resolveShared } from "./shared";
 import type { NodeEntryLoaderOptions } from "./node-entry-loader";
+import { defaultShared, eagerShared, resolveShared, tanstackStartSharedPackages } from "./shared";
 
 type ModuleFederationOverride = Partial<ModuleFederationOptions>;
 
@@ -127,10 +127,12 @@ export function tanstackStartModuleFederation({
     // The host's own server bundle consumes remotes. Its container, if any, is built by the
     // dedicated environment above, so TanStack's server output never contains one.
     const { exposes: _exposes, ...hostOptions } = { ...federation, ...serverOverrides };
+    const serverHostOptions = withDefaults(hostOptions, eagerShared);
+    serverHostOptions.shared = externalizeServerShared(serverHostOptions.shared);
     plugins.push(
       pluginModuleFederation(
         {
-          ...withDefaults(hostOptions, eagerShared),
+          ...serverHostOptions,
           manifest: false,
           runtimePlugins: [
             ...(hostOptions.runtimePlugins ?? []),
@@ -254,6 +256,28 @@ function serverContainerEnvironmentPlugin({
       });
     },
   };
+}
+
+function externalizeServerShared(
+  shared: ModuleFederationOptions["shared"],
+): ModuleFederationOptions["shared"] {
+  if (!shared || Array.isArray(shared)) return shared;
+
+  const configuredShared = shared as Record<string, unknown>;
+  const externalizedShared = { ...configuredShared };
+  for (const packageName of tanstackStartSharedPackages) {
+    externalizedShared[packageName] = externalizeSharedConfig(configuredShared[packageName]);
+  }
+  return externalizedShared as ModuleFederationOptions["shared"];
+}
+
+function externalizeSharedConfig(value: unknown): unknown {
+  if (typeof value === "string") return { import: value };
+  if (Array.isArray(value)) return value.map(externalizeSharedConfig);
+  if (!value || typeof value !== "object") return { import: false };
+
+  const config = value as Record<string, unknown>;
+  return { ...config, import: config.import ?? false };
 }
 
 const REMOTE_FAILURE_FACTORY = /(webpackRequire\.m\[id\]\s*=\s*\(\)\s*=>\s*\{)(\s*throw error;)/;

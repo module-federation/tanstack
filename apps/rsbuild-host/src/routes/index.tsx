@@ -18,6 +18,10 @@ function Home() {
           fallback="Loading the Vite remote…"
           remote="tanstack_vite_remote/StatusCard"
         />
+        <RemoteCardSlot
+          fallback="Loading the Router-aware remote…"
+          remote="tanstack_vite_remote/RouterCard"
+        />
       </div>
     </main>
   );

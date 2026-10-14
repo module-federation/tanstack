@@ -9,8 +9,11 @@ export default defineConfig({
       name: "tanstack_vite_remote",
       dts: false,
       // Workspace dependencies declare "workspace:*", which is not a semver range.
-      shared: { "example-host-context": { requiredVersion: "*", singleton: true } },
+      shared: {
+        "example-host-context": { requiredVersion: "*", singleton: true },
+      },
       exposes: {
+        "./RouterCard": "./src/components/RouterCard.tsx",
         "./StatusCard": "./src/components/StatusCard.tsx",
       },
     }),

@@ -46,6 +46,7 @@ test("npm package contains only runtime, metadata, and documentation files", () 
   const entries = [
     "index",
     "node-entry-loader",
+    "remote-fetch",
     "rsbuild",
     "runtime",
     "shared",

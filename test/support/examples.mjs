@@ -27,11 +27,15 @@ const cards = {
   rsbuildSsr: "Federated SSR from Rsbuild",
 };
 
+const routerCard = "Router-aware remote";
+
 // The remotes each SSR host renders on the server, across both bundlers.
 const serverRendered = {
   viteHost: ["viteRemote", "rsbuildSsrRemote"],
   rsbuildSsrHost: ["rsbuildSsrRemote", "viteRemote"],
 };
+
+const routerCardServerRendered = new Set(["viteHost", "rsbuildSsrHost"]);
 
 const remoteCards = { viteRemote: cards.vite, rsbuildSsrRemote: cards.rsbuildSsr };
 
@@ -76,6 +80,12 @@ export function describeExamples(script) {
         assert.equal(status, 200, host);
         for (const remote of remoteKeys) {
           assert.ok(body.includes(remoteCards[remote]), `${host} initial HTML contains ${remote}`);
+        }
+        if (routerCardServerRendered.has(host)) {
+          assert.ok(
+            body.includes("Remote uses the host router"),
+            `${host} initial HTML contains ${routerCard}`,
+          );
         }
         assert.equal(
           body.match(/Rendered on the server/g)?.length,
@@ -159,6 +169,7 @@ export function describeExamples(script) {
       for (const card of [cards.vite, cards.rsbuildSsr, cards.rsbuild]) {
         await assertInteractive(page, card);
       }
+      await assertRouterIntegration(page, routerCard);
       await assertHostContext(page, [cards.vite, cards.rsbuildSsr, cards.rsbuild], "Vite host");
     });
   });
@@ -167,6 +178,7 @@ export function describeExamples(script) {
     await withPage(apps.rsbuildHost.url, async (page) => {
       await assertInteractive(page, cards.vite);
       await assertInteractive(page, cards.rsbuild);
+      await assertRouterIntegration(page, routerCard);
       await assertHostContext(page, [cards.vite, cards.rsbuild], "Rsbuild host");
     });
   });
@@ -176,6 +188,7 @@ export function describeExamples(script) {
       await page.getByText("Hydrated on the host").first().waitFor({ timeout: 20_000 });
       await assertInteractive(page, cards.rsbuildSsr);
       await assertInteractive(page, cards.vite);
+      await assertRouterIntegration(page, routerCard);
       await assertHostContext(page, [cards.rsbuildSsr, cards.vite], "Rsbuild SSR host");
     });
   });
@@ -276,14 +289,21 @@ export function describeExamples(script) {
   /** Waits until every SSR host renders all of its remotes on the server. */
   async function assertServerRendersRemotes(when) {
     for (const [host, remoteKeys] of Object.entries(serverRendered)) {
-      const { body } = await waitForResponse(apps[host].url, processes[host], ({ body }) =>
-        remoteKeys.every((remote) => body.includes(remoteCards[remote])),
+      const { body } = await waitForResponse(
+        apps[host].url,
+        processes[host],
+        ({ body }) =>
+          remoteKeys.every((remote) => body.includes(remoteCards[remote])) &&
+          (!routerCardServerRendered.has(host) || body.includes("Remote uses the host router")),
       );
       assert.equal(
         body.match(/Rendered on the server/g)?.length,
         remoteKeys.length,
         `${host} renders its remotes on the server ${when}`,
       );
+      if (routerCardServerRendered.has(host)) {
+        assert.ok(body.includes("Remote uses the host router"), `${host} renders ${routerCard}`);
+      }
     }
   }
 
@@ -359,6 +379,19 @@ async function assertInteractive(page, cardText) {
     [cardText, before + 1],
     { timeout: 5_000 },
   );
+}
+
+/** Proves a remote component can render a Link and navigate through the host Router. */
+async function assertRouterIntegration(page, cardText) {
+  const card = page.locator("article", { hasText: cardText });
+  const link = card.getByRole("link", { name: "Remote link" });
+  assert.match((await link.getAttribute("href")) ?? "", /#router-link$/);
+
+  await link.click();
+  await page.waitForFunction(() => window.location.hash === "#router-link");
+
+  await card.getByRole("button", { name: "Remote navigate" }).click();
+  await page.waitForFunction(() => window.location.hash === "#router-navigate");
 }
 
 function startApp(name, script) {

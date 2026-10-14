@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "@module-federation/runtime": "2.9.2",
-    "@tanstack/react-router": "1.170.41",
-    "@tanstack/react-start": "1.168.60",
+    "@tanstack/react-router": "1.170.44",
+    "@tanstack/react-start": "1.169.1",
     "example-host-context": "workspace:*",
     "react": "19.3.0",
     "react-dom": "19.3.0"

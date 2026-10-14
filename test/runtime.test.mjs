@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { execFile, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { after, before, test } from "node:test";
@@ -238,6 +238,58 @@ test("allows disabling the CommonJS entry timeout", async () => {
   assert.equal(typeof container.get, "function");
 });
 
+test("bounds CommonJS server-entry responses", async () => {
+  const entry = serve(
+    "/limits/remoteEntry.ssr.cjs",
+    `module.exports.remote = { init() {}, get() {} };`,
+  );
+
+  await assert.rejects(
+    nodeEntryLoader({ fetchMaxBytes: 16 }).loadEntry({
+      origin: {},
+      remoteInfo: {
+        entry,
+        entryGlobalName: "remote",
+        name: "limited_remote",
+        type: "commonjs-module",
+      },
+    }),
+    (error) => {
+      assert.ok(error instanceof RemoteEntryError);
+      assert.equal(error.phase, "fetch");
+      assert.match(error.cause.message, /exceeds the maximum size of 16 bytes/);
+      return true;
+    },
+  );
+});
+
+test("times out CommonJS server-entry responses", async () => {
+  const entry = serve(
+    "/limits/slow-remoteEntry.ssr.cjs",
+    `module.exports.remote = { init() {}, get() {} };`,
+    "text/javascript",
+    50,
+  );
+
+  await assert.rejects(
+    nodeEntryLoader({ fetchTimeoutMs: 5 }).loadEntry({
+      origin: {},
+      remoteInfo: {
+        entry,
+        entryGlobalName: "remote",
+        name: "slow_remote",
+        type: "commonjs-module",
+      },
+    }),
+    (error) => {
+      assert.ok(error instanceof RemoteEntryError);
+      assert.equal(error.phase, "fetch");
+      assert.equal(error.cause.name, "AbortError");
+      return true;
+    },
+  );
+});
+
 test("revalidates a Vite SSR entry after maxAgeMs expires", async () => {
   let requestsForViteEntry = 0;
   const entry = serve("/revalidate-vite/remoteEntry.ssr.js", () => {
@@ -327,6 +379,44 @@ test("Vite remotes ask for @module-federation/vite when the host lacks it", () =
     const error = JSON.parse(result.stdout);
     assert.equal(error.phase, "loader");
     assert.match(error.message, /Add @module-federation\/vite to the host's dependencies/);
+  } finally {
+    rmSync(app, { force: true, recursive: true });
+  }
+});
+
+test("resolves a transitive Router core package from the Router package root", () => {
+  const app = mkdtempSync(join(tmpdir(), "mf-tanstack-transitive-"));
+  try {
+    const routerRequire = createRequire(join(root, "apps", "rsbuild-ssr-host", "package.json"));
+    const routerEntry = routerRequire.resolve("@tanstack/react-router");
+    const routerPackage = resolve(dirname(routerEntry), "../..");
+    const routerPackageRequire = createRequire(join(routerPackage, "package.json"));
+    const routerLink = join(app, "node_modules", "@tanstack", "react-router");
+    mkdirSync(dirname(routerLink), { recursive: true });
+    symlinkSync(routerPackage, routerLink, "dir");
+    writeFileSync(join(app, "package.json"), JSON.stringify({ private: true }));
+
+    const script = join(app, "server.mjs");
+    writeFileSync(
+      script,
+      `const { default: loader } = await import(${JSON.stringify(loaderUrl)});
+       let registered;
+       loader().apply({
+         name: "host",
+         options: { shared: {} },
+         registerShared(shared) { registered = shared; },
+       });
+       console.log(JSON.stringify({
+         router: registered?.["@tanstack/react-router"]?.version,
+         routerCore: registered?.["@tanstack/router-core"]?.version,
+       }));`,
+    );
+    const result = spawnSync(process.execPath, [script], { cwd: app, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), {
+      router: routerRequire("@tanstack/react-router/package.json").version,
+      routerCore: routerPackageRequire("@tanstack/router-core/package.json").version,
+    });
   } finally {
     rmSync(app, { force: true, recursive: true });
   }
@@ -451,6 +541,62 @@ test("getRemoteStylesheets reuses manifests briefly and retries failures", async
 
   assert.deepEqual(await getRemoteStylesheets(url, "./Card", { maxAgeMs: 0 }), []);
   assert.equal(fetches(), 3, "an expired manifest is fetched again");
+});
+
+test("getRemoteStylesheets applies fetch limits and parses JSON through the shared policy", async () => {
+  const oversized = serve(
+    "/styles/oversized-mf-manifest.json",
+    JSON.stringify({ exposes: [] }),
+    "application/json",
+  );
+  await assert.rejects(
+    getRemoteStylesheets(oversized, "./Card", { fetchMaxBytes: 8 }),
+    /exceeds the maximum size of 8 bytes/,
+  );
+
+  const malformed = serve("/styles/malformed-mf-manifest.json", "not-json", "application/json");
+  await assert.rejects(
+    getRemoteStylesheets(malformed, "./Card"),
+    /Could not parse the JSON response/,
+  );
+
+  const slow = serve(
+    "/styles/slow-mf-manifest.json",
+    JSON.stringify({ exposes: [] }),
+    "application/json",
+    50,
+  );
+  await assert.rejects(getRemoteStylesheets(slow, "./Card", { fetchTimeoutMs: 5 }), {
+    name: "AbortError",
+  });
+});
+
+test("getRemoteStylesheets single-flights in-flight manifests and timestamps successful cache entries", async () => {
+  let version = "v1";
+  const path = "/styles/concurrent-mf-manifest.json";
+  const url = serve(
+    path,
+    () =>
+      JSON.stringify({
+        exposes: [{ name: "Card", path: "./Card" }],
+        metaData: { publicPath: "auto" },
+        version,
+      }),
+    "application/json",
+    20,
+  );
+
+  const [first, second] = await Promise.all([
+    getRemoteStylesheets(url, "./Card"),
+    getRemoteStylesheets(url, "./Card"),
+  ]);
+  assert.deepEqual(first, []);
+  assert.deepEqual(second, []);
+  assert.equal(requests.filter((request) => request === path).length, 1);
+
+  version = "v2";
+  await getRemoteStylesheets(url, "./Card", { maxAgeMs: 0 });
+  assert.equal(requests.filter((request) => request === path).length, 2);
 });
 
 /** Server-renders `element` to HTML once every Suspense boundary has settled. */

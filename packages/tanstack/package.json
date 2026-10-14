@@ -100,7 +100,7 @@
     "@module-federation/rsbuild-plugin": "^2.9.0",
     "@module-federation/vite": "^1.23.3",
     "@rsbuild/core": "^2.0.0",
-    "@tanstack/react-start": "^1.167.43",
+    "@tanstack/react-start": "^1.169.1",
     "react": ">=18.0.0",
     "vite": "^8.0.0"
   },
@@ -130,7 +130,7 @@
     "@module-federation/vite": "1.23.3",
     "@rsbuild/core": "2.2.11",
     "@rslib/core": "1.0.3",
-    "@tanstack/react-start": "1.168.60",
+    "@tanstack/react-start": "1.169.1",
     "@types/node": "26.6.4",
     "@types/react": "19.3.0",
     "react": "19.3.0",

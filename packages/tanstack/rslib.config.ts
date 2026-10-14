@@ -3,6 +3,7 @@ import { defineConfig } from "@rslib/core";
 const entry = {
   index: "./src/index.ts",
   "node-entry-loader": "./src/node-entry-loader.ts",
+  "remote-fetch": "./src/remote-fetch.ts",
   rsbuild: "./src/rsbuild.ts",
   runtime: "./src/runtime.ts",
   shared: "./src/shared.ts",

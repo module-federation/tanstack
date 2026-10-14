@@ -51,8 +51,9 @@ server show "Rendered on the server" until they hydrate.
   `@module-federation/vite` and `vite`.
 
 Stop a remote while the hosts are open and reload them: each host keeps
-rendering and shows its fallback, then renders the remote again once it is
-back. The same holds for a host started before its remotes.
+rendering, the client-side boundary shows its fallback, and the remote renders
+again once it is back. An SSR error boundary fallback is not guaranteed in the
+initial server HTML. The same holds for a host started before its remotes.
 
 ## Notes
 

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -9,6 +10,8 @@ const viteHostDist = join(root, "apps", "vite-host", "dist");
 const viteRemoteDist = join(root, "apps", "vite-remote", "dist");
 const rsbuildHostDist = join(root, "apps", "rsbuild-host", "dist");
 const rsbuildRemoteDist = join(root, "apps", "rsbuild-remote", "dist");
+const rsbuildSsrHostDist = join(root, "apps", "rsbuild-ssr-host", "dist");
+const remoteRequire = createRequire(join(root, "apps", "vite-remote", "package.json"));
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
@@ -20,6 +23,7 @@ test("all TanStack Start apps produce client and server builds", () => {
     ["Vite remote", viteRemoteDist],
     ["rsbuild host", rsbuildHostDist],
     ["rsbuild remote", rsbuildRemoteDist],
+    ["rsbuild SSR host", rsbuildSsrHostDist],
   ]) {
     assert.ok(existsSync(join(dist, "client", "mf-manifest.json")), `${name} client`);
     const serverEntry = name.startsWith("rsbuild") ? "index.js" : "server.js";
@@ -40,16 +44,30 @@ test("remote publishes browser and server federation entries", () => {
   const statusCard = manifest.exposes.find(({ path }) => path === "./StatusCard");
   assert.ok(statusCard, "StatusCard expose is listed");
   assert.ok(statusCard.assets.css.sync.length > 0, "StatusCard CSS is published");
+  assert.ok(
+    manifest.exposes.find(({ path }) => path === "./RouterCard"),
+    "RouterCard expose is listed",
+  );
 
   for (const dependency of ["react", "react-dom"]) {
     const shared = manifest.shared.find(({ name }) => name === dependency);
     assert.equal(shared?.singleton, true, `${dependency} is a singleton`);
   }
+  for (const [dependency, version] of [
+    ["@tanstack/react-router", remoteRequire("@tanstack/react-router/package.json").version],
+    ["@tanstack/router-core", remoteRequire("@tanstack/router-core/package.json").version],
+  ]) {
+    const shared = manifest.shared.find(({ name }) => name === dependency);
+    assert.equal(shared?.singleton, true, `${dependency} is a singleton`);
+    assert.equal(shared?.requiredVersion, version, `${dependency} is pinned`);
+  }
 });
 
 test("Vite host records the TanStack remote and server-side loader", () => {
   const manifest = readJson(join(viteHostDist, "client", "mf-manifest.json"));
-  const remote = manifest.remotes.find(({ alias }) => alias === "tanstack_vite_remote");
+  const remote = manifest.remotes.find(
+    ({ alias, moduleName }) => alias === "tanstack_vite_remote" && moduleName === "StatusCard",
+  );
   assert.equal(remote?.moduleName, "StatusCard");
 
   const serverFiles = readFileSync(join(viteHostDist, "server", ".vite", "manifest.json"), "utf8");
@@ -61,6 +79,7 @@ test("Vite and Rsbuild publish reciprocal client interoperability contracts", ()
   const viteHostManifest = readJson(join(viteHostDist, "client", "mf-manifest.json"));
   const rsbuildHostManifest = readJson(join(rsbuildHostDist, "client", "mf-manifest.json"));
   const rsbuildRemoteClient = readJson(join(rsbuildRemoteDist, "client", "mf-manifest.json"));
+  const rsbuildSsrHostManifest = readJson(join(rsbuildSsrHostDist, "client", "mf-manifest.json"));
 
   assert.equal(
     viteHostManifest.remotes.find(({ alias }) => alias === "tanstack_rsbuild_remote")?.moduleName,
@@ -96,6 +115,18 @@ test("Vite and Rsbuild publish reciprocal client interoperability contracts", ()
         true,
         `${dependency} is a singleton`,
       );
+    }
+  }
+
+  for (const [manifest, host] of [
+    [viteHostManifest, "Vite host"],
+    [rsbuildHostManifest, "Rsbuild host"],
+    [rsbuildSsrHostManifest, "Rsbuild SSR host"],
+  ]) {
+    for (const dependency of ["@tanstack/react-router", "@tanstack/router-core"]) {
+      const shared = manifest.shared.find(({ name }) => name === dependency);
+      assert.equal(shared?.singleton, true, `${host} shares ${dependency} as a singleton`);
+      assert.ok(shared?.requiredVersion, `${host} pins ${dependency}`);
     }
   }
 });

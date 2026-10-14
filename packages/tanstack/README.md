@@ -53,10 +53,11 @@ Defaults:
 
 - `filename: "remoteEntry.js"`, `manifest: true`, and
   `hostInitInjectLocation: "entry"`.
-- `react` and `react-dom` are shared singletons. When the config declares
-  `remotes`, they are also `eager`, so the host's own React stays in the share
-  scope and a remote built by another bundler cannot replace it. Remote-only
-  builds stay lazy.
+- `react`, `react-dom`, `@tanstack/react-router`, and `@tanstack/router-core`
+  are shared singletons. When the config declares `remotes`, they are also
+  `eager`, so the host's own React and Router runtimes stay in the share scope
+  and a remote built by another bundler cannot replace them. Remote-only builds
+  stay lazy.
 - Any entry you pass in `shared` replaces the default for that package.
 
 A Vite host renders before lazy shared modules resolve, so mark any other shared
@@ -129,8 +130,9 @@ can be consumed by Vite and Rsbuild hosts.
 
 Defaults:
 
-- `react` and `react-dom` are shared singletons, `eager` for hosts (configs with
-  `remotes`) and lazy for remote-only builds.
+- `react`, `react-dom`, `@tanstack/react-router`, and `@tanstack/router-core`
+  are shared singletons, `eager` for hosts (configs with `remotes`) and lazy
+  for remote-only builds.
 - `experiments.asyncStartup: true`, so entries wait for shared modules before
   running. Pass `experiments: { asyncStartup: false }` to opt out.
 - A remote's browser build uses `publicPath: "auto"`, so hosts on other origins
@@ -218,7 +220,7 @@ const StatusCard = lazyRemote(() => import("remote/StatusCard"));
 
 export const Route = createFileRoute("/")({
   // Loading the remote before rendering puts its markup in the server response.
-  // A failed load must not fail the route: the boundary renders a fallback.
+  // Catch route-loader failures so an unavailable remote does not fail the route.
   loader: async () => {
     const [stylesheets] = await Promise.all([
       getRemoteStylesheets("https://remote.test/mf-manifest.json", "./StatusCard").catch(() => []),
@@ -238,13 +240,17 @@ export const Route = createFileRoute("/")({
 ```
 
 `RemoteBoundary` stands for any error boundary around a `Suspense`; the
-examples in `apps/` include one.
+examples in `apps/` include one. The route loader must catch remote failures.
+During SSR, React does not guarantee that an error boundary switches to its
+fallback for a rejected lazy module; the fallback is handled during client
+rendering or hydration recovery instead.
 
 - **`lazyRemote(load, { retryAfterMs })`** is `React.lazy` for remotes. A
-  `React.lazy` component that fails once stays failed, so a server that hit a
-  remote outage would render the fallback until it restarts. `lazyRemote` loads
-  again on the first render after `retryAfterMs` (5 seconds by default). The
-  import itself loads again after a failure too: `@module-federation/vite`
+  `React.lazy` component that fails once stays rejected until its lazy instance
+  is recreated. `lazyRemote` recreates it on the first render after
+  `retryAfterMs` (5 seconds by default), so a later request can retry a remote
+  that recovered. This retry policy does not make an SSR error boundary render
+  its fallback. The import itself loads again after a failure too: `@module-federation/vite`
   1.23.3+ retries failed server loads, and the Rsbuild adapter removes a failed
   remote module from Rspack's module cache.
 - **`getRemoteStylesheets(manifestUrl, expose, { maxAgeMs })`** lists the

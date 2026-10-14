@@ -19,6 +19,7 @@ export function tanstackStartModuleFederation(
   // shares keep that instance in the share scope, so remotes from other bundlers cannot
   // replace it. Remote-only builds stay lazy and defer to the host.
   const isHost = Object.keys(configured.remotes ?? {}).length > 0;
+  const resolvedShared = resolveViteShared(shared, isHost);
 
   return [
     viteVersionPlugin(),
@@ -27,10 +28,11 @@ export function tanstackStartModuleFederation(
       filename: configured.filename ?? "remoteEntry.js",
       manifest: configured.manifest ?? true,
       hostInitInjectLocation: configured.hostInitInjectLocation ?? "entry",
-      shared: resolveShared(
-        shared,
-        isHost ? eagerShared : defaultShared,
-      ) as ModuleFederationOptions["shared"],
+      shared: resolvedShared as ModuleFederationOptions["shared"],
     }),
   ];
+}
+
+function resolveViteShared(shared: ModuleFederationOptions["shared"], isHost: boolean) {
+  return resolveShared(shared, isHost ? eagerShared : defaultShared);
 }
