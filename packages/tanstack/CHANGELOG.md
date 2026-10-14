@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.1 (2026-10-14)
+
+## What's Changed
+* fix: stabilize TanStack SSR remote revalidation by @dmchoi77 in https://github.com/module-federation/tanstack/pull/5
+* fix: preserve Router context across SSR bundlers by @dmchoi77 in https://github.com/module-federation/tanstack/pull/6
+* fix(docs): clarify SSR remote fallback behavior by @dmchoi77 in https://github.com/module-federation/tanstack/pull/7
+* fix: unify Vite and Rsbuild runtime fetch policies by @dmchoi77 in https://github.com/module-federation/tanstack/pull/8
+* chore: bump TanStack Start to stable by @dmchoi77 in https://github.com/module-federation/tanstack/pull/10
+* ci: release with release-please instead of Changesets by @Nsttt in https://github.com/module-federation/tanstack/pull/9
+* ci: use GitHub App token for release-please by @2heal1 in https://github.com/module-federation/tanstack/pull/12
+* Use GitHub style for generated changelogs by @Nsttt in https://github.com/module-federation/tanstack/pull/14
+* Fix main CI compatibility and release token checks by @Nsttt in https://github.com/module-federation/tanstack/pull/15
+
+## New Contributors
+* @dmchoi77 made their first contribution in https://github.com/module-federation/tanstack/pull/5
+
+**Full Changelog**: https://github.com/module-federation/tanstack/compare/0.1.0...0.1.1
+
 ## 0.1.0
 
 Initial release: Module Federation for TanStack Start on Vite and Rsbuild.
