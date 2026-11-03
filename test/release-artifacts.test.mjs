@@ -19,6 +19,8 @@ test("published declarations reference included source maps", () => {
     "rsbuild.d.ts",
     "runtime.d.cts",
     "runtime.d.ts",
+    "server-functions.d.cts",
+    "server-functions.d.ts",
     "vite.d.cts",
     "vite.d.ts",
   ]) {
@@ -50,6 +52,7 @@ test("npm package contains only runtime, metadata, and documentation files", () 
     "rsbuild",
     "runtime",
     "server-container-rpc",
+    "server-functions",
     "shared",
     "vite",
     "vite-compat",

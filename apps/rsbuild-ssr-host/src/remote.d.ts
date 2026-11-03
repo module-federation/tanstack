@@ -18,3 +18,7 @@ declare module "tanstack_vite_remote/RouterCard" {
   const RouterCard: ComponentType;
   export default RouterCard;
 }
+
+declare module "tanstack_rsbuild_ssr_remote/serverFunctions" {
+  export const getRemoteGreeting: () => Promise<{ message: string }>;
+}

@@ -12,7 +12,8 @@ export default defineConfig({
   },
   plugins: [
     pluginReact(),
-    tanstackStart(),
+    // Hosts forward calls under /_federation/<federation name>/_serverFn to this server.
+    tanstackStart({ serverFns: { base: "/_federation/tanstack_rsbuild_ssr_remote/_serverFn" } }),
     ...tanstackStartModuleFederation({
       federation: {
         dev: { disableDynamicRemoteTypeHints: true },

@@ -25,3 +25,7 @@ declare module "tanstack_rsbuild_ssr_remote/StatusCard" {
   const StatusCard: ComponentType;
   export default StatusCard;
 }
+
+declare module "tanstack_rsbuild_ssr_remote/serverFunctions" {
+  export const getRemoteGreeting: () => Promise<{ message: string }>;
+}

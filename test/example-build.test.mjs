@@ -82,9 +82,10 @@ test("Rsbuild remote's published server container calls its server functions", (
     readFileSync(join(client, "remoteEntry.ssr.cjs"), "utf8"),
     readBundleCode(join(client, "ssr")),
   ].join("\n");
-  assert.doesNotMatch(container, /rsbuild-ssr-remote server function handler/);
+  assert.doesNotMatch(container, /Answered by the Rsbuild remote's server/);
   assert.match(container, /createSsrRpc\("[0-9a-f]{64}"\)/);
-  assert.match(container, /belongs to a federated remote/);
+  // Hosts route the remote's calls by its namespaced server function base.
+  assert.ok(container.includes('"/_federation/tanstack_rsbuild_ssr_remote/_serverFn/"'));
 });
 
 test("Vite host records the TanStack remote and server-side loader", () => {
