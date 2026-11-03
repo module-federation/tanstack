@@ -172,8 +172,8 @@ provided elsewhere: each `createServerFn` handler becomes an RPC caller, and
 the handler stays in the remote's own server output. The build fails if a
 module in the container still defines a server function after that, for
 example with a TanStack Start release whose compiler the adapter cannot load.
-Hosts cannot call a remote's server functions yet (see
-[Known limitations](#known-limitations)).
+The remote's server keeps answering those calls; see
+[Remote server functions](#remote-server-functions).
 
 When a remote's server entry cannot load, the host's runtime plugin throws a
 `RemoteEntryError` whose `phase` is `fetch`, `evaluate`, or `loader` and whose
@@ -270,13 +270,65 @@ rendering or hydration recovery instead.
   and on the server, reuses a fetched manifest for 30 seconds (`maxAgeMs`), and
   rejects when the manifest is unreachable or does not list the expose.
 
+## Remote server functions
+
+An Rsbuild remote's exposed modules can call the remote's `createServerFn`
+functions, and the calls run on the remote's server, wherever a host renders
+them. The remote's code calls its server function base on the page's origin,
+which is the host's, so the remote gives its server functions a base the host
+can recognize, and the host forwards those calls:
+
+```ts
+// The remote's rsbuild.config.ts. The base is /_federation/<federation name>/_serverFn.
+tanstackStart({ serverFns: { base: "/_federation/catalog/_serverFn" } });
+```
+
+```ts
+// The host's src/start.ts
+import { createRemoteServerFunctions } from "@module-federation/tanstack/server-functions";
+import { createCsrfMiddleware, createMiddleware, createStart } from "@tanstack/react-start";
+
+const remoteServerFunctions = createRemoteServerFunctions({
+  remotes: { catalog: { origin: () => process.env.CATALOG_ORIGIN! } },
+});
+
+export const startInstance = createStart(() => ({
+  requestMiddleware: [
+    // Request middleware replaces Start's default check for the host's own server functions.
+    createCsrfMiddleware({ filter: ({ handlerType }) => handlerType === "serverFn" }),
+    createMiddleware().server(
+      ({ next, request }) => remoteServerFunctions.handle(request) ?? next(),
+    ),
+  ],
+}));
+```
+
+- **In the browser**, `handle` forwards calls under
+  `/_federation/<name>/_serverFn/` to the remote's `origin`. It accepts only
+  calls from the host's own pages, forwards only the headers TanStack Start's
+  protocol uses, and drops `Set-Cookie` from the answer. Middleware placed
+  before it, such as authentication, runs first. A reverse proxy that routes
+  the same path to the remote's server works as well.
+- **While the host renders**, the remote's Node container calls the remote's
+  `origin` over HTTP with TanStack Start's serialization. `createRemoteServerFunctions`
+  must have run on the host's server by then, which `src/start.ts` ensures.
+- The remote's server checks that calls come from its own origin, so both
+  paths present the remote's origin to it.
+- Cookies and authorization headers reach the remote only when the remote's
+  `headers` option returns them. It receives the request the host is handling:
+  `headers: ({ request }) => ({ cookie: request?.headers.get("cookie") ?? "" })`.
+- `timeoutMs` (10 seconds by default) bounds the wait for the remote's response
+  headers, not a streamed body. An unreachable or slow remote answers `502` in
+  the browser and rejects during server rendering.
+
+The build fails when a remote's exposed modules call server functions and its
+`serverFns.base` is not `/_federation/<name>/_serverFn`.
+
 ## Known limitations
 
-- Hosts cannot call a remote's server functions. In the browser, a remote's
-  call goes to its `serverFns.base` on the host's origin, where the host does
-  not know the function, unless something such as a reverse proxy routes the
-  remote's `serverFns.base` to the remote's server. During server rendering,
-  the call throws.
+- Remote server functions use the host's serialization adapters while the host
+  renders, so values that need the remote's own adapters do not cross. Remotes
+  that use a router `basepath` are not supported.
 - A Vite remote's server entry is built by `@module-federation/vite` from the
   remote's server environment, so it includes the handlers of the server
   functions its exposed modules import, and it is published with the browser

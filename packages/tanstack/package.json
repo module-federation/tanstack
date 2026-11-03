@@ -69,6 +69,16 @@
         "default": "./dist/server-container-rpc.cjs"
       }
     },
+    "./server-functions": {
+      "import": {
+        "types": "./dist/server-functions.d.ts",
+        "default": "./dist/server-functions.js"
+      },
+      "require": {
+        "types": "./dist/server-functions.d.cts",
+        "default": "./dist/server-functions.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [

@@ -171,9 +171,12 @@ Fixed upstream in `@module-federation/vite` 1.23.3:
 - [ ] Keep server function handlers out of a Vite remote's published SSR entry.
       `@module-federation/vite` builds it from the remote's server environment,
       where TanStack Start compiles handlers in place.
-- [ ] Route a remote's server-function calls to the remote's server: browser
-      calls through its `serverFns.base` (host gateway or reverse proxy), and
-      server-rendering calls over HTTP from the container's `createSsrRpc`.
+- [x] Route an Rsbuild remote's server-function calls to the remote's server:
+      browser calls through `createRemoteServerFunctions().handle` in the host's
+      request middleware (or a reverse proxy), and server-rendering calls over
+      HTTP from the container's `createSsrRpc`. Both Rsbuild and Vite hosts.
+- [ ] Remote server functions with the remote's own serialization adapters, a
+      router `basepath`, and cookies set by the remote.
 
 ### Shared dependencies
 

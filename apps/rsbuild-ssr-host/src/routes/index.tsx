@@ -14,21 +14,31 @@ const serverRenderedManifests = [
   "http://127.0.0.1:3001/mf-manifest.json",
 ];
 
+// Calls the Rsbuild SSR remote's server function on the server: the remote's container
+// sends it to the remote's server, so the answer is in the initial HTML.
+function askRemoteServer() {
+  return import("tanstack_rsbuild_ssr_remote/serverFunctions")
+    .then(({ getRemoteGreeting }) => getRemoteGreeting())
+    .then(({ message }) => message)
+    .catch(() => null);
+}
+
 export const Route = createFileRoute("/")({
   // Loading the remotes before render puts their markup in the server response.
   // An unavailable remote must not fail the route: its boundary renders a fallback.
   loader: async () => {
-    const [stylesheets] = await Promise.all([
+    const [stylesheets, remoteAnswer] = await Promise.all([
       Promise.all(
         serverRenderedManifests.map((manifest) =>
           getRemoteStylesheets(manifest, "./StatusCard").catch(() => []),
         ),
       ).then((lists) => lists.flat()),
+      askRemoteServer(),
       import("tanstack_rsbuild_ssr_remote/StatusCard").catch(() => null),
       import("tanstack_vite_remote/StatusCard").catch(() => null),
       import("tanstack_vite_remote/RouterCard").catch(() => null),
     ]);
-    return { stylesheets };
+    return { remoteAnswer, stylesheets };
   },
   // The remote markup arrives with the HTML, so its stylesheets must too. Otherwise it stays
   // unstyled until the remote's JavaScript loads.
@@ -46,6 +56,7 @@ function Home() {
       <p>
         This TanStack Start server renders both remote cards before the page reaches the browser.
       </p>
+      <RemoteAnswer />
       <div className="remote-grid">
         <RemoteBoundary fallback="Loading the Rsbuild SSR remote…" name="Rsbuild SSR remote">
           <RsbuildStatusCard />
@@ -58,5 +69,14 @@ function Home() {
         </RemoteBoundary>
       </div>
     </main>
+  );
+}
+
+function RemoteAnswer() {
+  const { remoteAnswer } = Route.useLoaderData();
+  return (
+    <p className="remote-server-answer">
+      {remoteAnswer ?? "The Rsbuild SSR remote's server did not answer."}
+    </p>
   );
 }
