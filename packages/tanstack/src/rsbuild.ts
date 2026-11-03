@@ -1,4 +1,6 @@
-import { join } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   pluginModuleFederation,
   type ModuleFederationOptions,
@@ -49,6 +51,7 @@ const SERVER_CONTAINER_FILENAME = "remoteEntry.ssr.cjs";
 const SERVER_CHUNK_DIR = "ssr";
 const SERVER_CONTAINER_ENVIRONMENT = "mf-server";
 const NODE_ENTRY_LOADER = "@module-federation/tanstack/node-entry-loader";
+const SERVER_CONTAINER_RPC = "@module-federation/tanstack/server-container-rpc";
 
 /** Creates browser and optional SSR federation adapters for TanStack Start's Rsbuild integration. */
 export function tanstackStartModuleFederation({
@@ -106,6 +109,7 @@ export function tanstackStartModuleFederation({
     const { remotes: _remotes, ...containerOptions } = { ...federation, ...serverOverrides };
     plugins.push(
       serverContainerEnvironmentPlugin({ clientEnvironment }),
+      serverContainerFunctionsPlugin({ serverEnvironment }),
       pluginModuleFederation(
         withDefaults(
           {
@@ -254,6 +258,99 @@ function serverContainerEnvironmentPlugin({
         containerConfig.output.publicPath =
           typeof publicPath === "string" && publicPath !== "auto" ? publicPath : "auto";
       });
+    },
+  };
+}
+
+type RegisterStartCompilerTransforms = (
+  api: Parameters<RsbuildPlugin["setup"]>[0],
+  options: {
+    environments: { name: string; type: "client" | "server" }[];
+    framework: "react";
+    providerEnvName: string;
+    root: string;
+  },
+) => void;
+
+/**
+ * Loads the Rsbuild host of TanStack Start's compiler. Start registers it only for its own
+ * environments and has no public API for another one, so this reads it from
+ * `@tanstack/start-plugin-core` and returns `undefined` when a release moves it.
+ */
+async function loadStartCompiler(
+  root: string,
+): Promise<RegisterStartCompilerTransforms | undefined> {
+  try {
+    const appRequire = createRequire(join(root, "package.json"));
+    const startRequire = createRequire(appRequire.resolve("@tanstack/react-start/package.json"));
+    const corePackage = startRequire.resolve("@tanstack/start-plugin-core/package.json");
+    const compilerHost = join(dirname(corePackage), "dist/esm/rsbuild/start-compiler-host.js");
+    const { registerStartCompilerTransforms } = await import(pathToFileURL(compilerHost).href);
+    return typeof registerStartCompilerTransforms === "function"
+      ? registerStartCompilerTransforms
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const SERVER_FN_DEFINITION = /\bcreateServerFn\b/;
+const SERVER_FN_CALLER = /\bcreateSsrRpc\b/;
+const TANSTACK_PACKAGE = /[\\/]node_modules[\\/]@tanstack[\\/]/;
+
+/**
+ * Keeps server function handlers out of a remote's Node container, which is published with
+ * the browser assets. TanStack Start compiles its own environments only, so the container
+ * would otherwise bundle every `createServerFn` handler, with the server code it imports.
+ * The container is compiled like Start's server-rendering environment when the server
+ * functions live in another one: each handler becomes an RPC caller. Any module that still
+ * defines a server function after that stops the build.
+ */
+function serverContainerFunctionsPlugin({
+  serverEnvironment,
+}: {
+  serverEnvironment: string;
+}): RsbuildPlugin {
+  return {
+    name: "tanstack-start-federation-server-container-functions",
+    async setup(api) {
+      const registerStartCompilerTransforms = await loadStartCompiler(api.context.rootPath);
+      registerStartCompilerTransforms?.(api, {
+        environments: [{ name: SERVER_CONTAINER_ENVIRONMENT, type: "server" }],
+        framework: "react",
+        providerEnvName: serverEnvironment,
+        root: api.context.rootPath,
+      });
+
+      api.modifyEnvironmentConfig((config, { mergeEnvironmentConfig, name }) => {
+        if (name !== SERVER_CONTAINER_ENVIRONMENT) return;
+        return mergeEnvironmentConfig(config, {
+          resolve: { alias: { "@tanstack/react-start/ssr-rpc$": SERVER_CONTAINER_RPC } },
+        });
+      });
+
+      api.transform(
+        { environments: [SERVER_CONTAINER_ENVIRONMENT], test: /\.[cm]?[jt]sx?$/ },
+        ({ code, resource }) => {
+          if (
+            TANSTACK_PACKAGE.test(resource) ||
+            !SERVER_FN_DEFINITION.test(code) ||
+            SERVER_FN_CALLER.test(code)
+          ) {
+            return code;
+          }
+          throw new Error(
+            `${resource} defines a server function that was not compiled for the remote's ` +
+              `Node container (${SERVER_CONTAINER_FILENAME}), which would publish its ` +
+              "handler with the browser assets." +
+              (registerStartCompilerTransforms
+                ? ""
+                : " @module-federation/tanstack could not load TanStack Start's compiler " +
+                  "from @tanstack/start-plugin-core; this TanStack Start version is not " +
+                  "supported."),
+          );
+        },
+      );
     },
   };
 }

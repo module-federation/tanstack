@@ -59,6 +59,16 @@
         "default": "./dist/runtime.cjs"
       }
     },
+    "./server-container-rpc": {
+      "import": {
+        "types": "./dist/server-container-rpc.d.ts",
+        "default": "./dist/server-container-rpc.js"
+      },
+      "require": {
+        "types": "./dist/server-container-rpc.d.cts",
+        "default": "./dist/server-container-rpc.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [

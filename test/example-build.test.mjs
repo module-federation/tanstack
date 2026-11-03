@@ -11,6 +11,7 @@ const viteRemoteDist = join(root, "apps", "vite-remote", "dist");
 const rsbuildHostDist = join(root, "apps", "rsbuild-host", "dist");
 const rsbuildRemoteDist = join(root, "apps", "rsbuild-remote", "dist");
 const rsbuildSsrHostDist = join(root, "apps", "rsbuild-ssr-host", "dist");
+const rsbuildSsrRemoteDist = join(root, "apps", "rsbuild-ssr-remote", "dist");
 const remoteRequire = createRequire(join(root, "apps", "vite-remote", "package.json"));
 
 function readJson(path) {
@@ -68,6 +69,22 @@ test("remote publishes browser and server federation entries", () => {
     assert.equal(shared?.singleton, true, `${dependency} is a singleton`);
     assert.equal(shared?.requiredVersion, version, `${dependency} is pinned`);
   }
+});
+
+test("Rsbuild remote's published server container calls its server functions", () => {
+  const client = join(rsbuildSsrRemoteDist, "client");
+  const manifest = readJson(join(client, "mf-manifest.json"));
+  assert.ok(manifest.exposes.find(({ path }) => path === "./serverFunctions"));
+
+  // The Node container ships with the browser assets, so a handler compiled into it would
+  // be public. TanStack Start replaces each handler with an RPC caller instead.
+  const container = [
+    readFileSync(join(client, "remoteEntry.ssr.cjs"), "utf8"),
+    readBundleCode(join(client, "ssr")),
+  ].join("\n");
+  assert.doesNotMatch(container, /rsbuild-ssr-remote server function handler/);
+  assert.match(container, /createSsrRpc\("[0-9a-f]{64}"\)/);
+  assert.match(container, /belongs to a federated remote/);
 });
 
 test("Vite host records the TanStack remote and server-side loader", () => {

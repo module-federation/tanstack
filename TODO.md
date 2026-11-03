@@ -160,6 +160,21 @@ Fixed upstream in `@module-federation/vite` 1.23.3:
       same files (true in a monorepo). Production builds take React from the
       share scope.
 
+### Server functions
+
+- [x] Compile an Rsbuild remote's Node container as a server-function caller, so
+      `createServerFn` handlers stay in the remote's server output instead of the
+      published `remoteEntry.ssr.cjs`, and fail the build when a handler would
+      ship. Uses TanStack Start's private Rsbuild compiler host
+      (`@tanstack/start-plugin-core/dist/esm/rsbuild/start-compiler-host.js`);
+      ask TanStack for a public way to compile an extra caller environment.
+- [ ] Keep server function handlers out of a Vite remote's published SSR entry.
+      `@module-federation/vite` builds it from the remote's server environment,
+      where TanStack Start compiles handlers in place.
+- [ ] Route a remote's server-function calls to the remote's server: browser
+      calls through its `serverFns.base` (host gateway or reverse proxy), and
+      server-rendering calls over HTTP from the container's `createSsrRpc`.
+
 ### Shared dependencies
 
 - [x] React range: React 19. TanStack Start 1.168 accepts React 18, but its

@@ -17,7 +17,10 @@ export default defineConfig({
       federation: {
         dev: { disableDynamicRemoteTypeHints: true },
         dts: false,
-        exposes: { "./StatusCard": "./src/components/StatusCard.tsx" },
+        exposes: {
+          "./StatusCard": "./src/components/StatusCard.tsx",
+          "./serverFunctions": "./src/server-functions.ts",
+        },
         name: "tanstack_rsbuild_ssr_remote",
         // Workspace dependencies declare "workspace:*", which is not a semver range.
         shared: { "example-host-context": { requiredVersion: "*", singleton: true } },
