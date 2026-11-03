@@ -7,6 +7,7 @@ import {
 } from "@module-federation/rsbuild-plugin";
 import type { RsbuildPlugin } from "@rsbuild/core";
 import type { NodeEntryLoaderOptions } from "./node-entry-loader";
+import { remoteServerFunctionBase } from "./server-functions";
 import { defaultShared, eagerShared, resolveShared, tanstackStartSharedPackages } from "./shared";
 
 type ModuleFederationOverride = Partial<ModuleFederationOptions>;
@@ -109,7 +110,7 @@ export function tanstackStartModuleFederation({
     const { remotes: _remotes, ...containerOptions } = { ...federation, ...serverOverrides };
     plugins.push(
       serverContainerEnvironmentPlugin({ clientEnvironment }),
-      serverContainerFunctionsPlugin({ serverEnvironment }),
+      serverContainerFunctionsPlugin({ name: federationName, serverEnvironment }),
       pluginModuleFederation(
         withDefaults(
           {
@@ -296,6 +297,9 @@ async function loadStartCompiler(
 
 const SERVER_FN_DEFINITION = /\bcreateServerFn\b/;
 const SERVER_FN_CALLER = /\bcreateSsrRpc\b/;
+// A compiled caller passes its function ID as a string literal.
+const SERVER_FN_CALLER_CALL = /\bcreateSsrRpc\(\s*["'`]/;
+const SERVER_FN_BASE_DEFINE = "process.env.TSS_SERVER_FN_BASE";
 const TANSTACK_PACKAGE = /[\\/]node_modules[\\/]@tanstack[\\/]/;
 
 /**
@@ -303,12 +307,18 @@ const TANSTACK_PACKAGE = /[\\/]node_modules[\\/]@tanstack[\\/]/;
  * the browser assets. TanStack Start compiles its own environments only, so the container
  * would otherwise bundle every `createServerFn` handler, with the server code it imports.
  * The container is compiled like Start's server-rendering environment when the server
- * functions live in another one: each handler becomes an RPC caller. Any module that still
- * defines a server function after that stops the build.
+ * functions live in another one: each handler becomes an RPC caller, which calls the
+ * remote's server while a host renders the remote. Any module that still defines a server
+ * function after that stops the build.
+ *
+ * Hosts route a remote's calls by its server function base, so a remote whose container
+ * calls server functions must use `/_federation/<name>/_serverFn`.
  */
 function serverContainerFunctionsPlugin({
+  name: remoteName,
   serverEnvironment,
 }: {
+  name: string;
   serverEnvironment: string;
 }): RsbuildPlugin {
   return {
@@ -326,19 +336,35 @@ function serverContainerFunctionsPlugin({
         if (name !== SERVER_CONTAINER_ENVIRONMENT) return;
         return mergeEnvironmentConfig(config, {
           resolve: { alias: { "@tanstack/react-start/ssr-rpc$": SERVER_CONTAINER_RPC } },
+          source: { define: { __MF_TANSTACK_REMOTE_NAME__: JSON.stringify(remoteName) } },
         });
       });
+
+      const expectedBase = remoteServerFunctionBase(remoteName);
+      let checkedBase = false;
+      const checkServerFunctionBase = () => {
+        if (checkedBase) return;
+        const { define } = api.getNormalizedConfig({
+          environment: SERVER_CONTAINER_ENVIRONMENT,
+        }).source;
+        const base = define[SERVER_FN_BASE_DEFINE];
+        if (base !== JSON.stringify(expectedBase)) {
+          throw new Error(
+            `Remote "${remoteName}" exposes modules that call server functions, so hosts must ` +
+              "be able to route those calls to its server. Set " +
+              `tanstackStart({ serverFns: { base: "${expectedBase.slice(0, -1)}" } }) ` +
+              `in the remote (its server function base is ${String(base)}).`,
+          );
+        }
+        checkedBase = true;
+      };
 
       api.transform(
         { environments: [SERVER_CONTAINER_ENVIRONMENT], test: /\.[cm]?[jt]sx?$/ },
         ({ code, resource }) => {
-          if (
-            TANSTACK_PACKAGE.test(resource) ||
-            !SERVER_FN_DEFINITION.test(code) ||
-            SERVER_FN_CALLER.test(code)
-          ) {
-            return code;
-          }
+          if (TANSTACK_PACKAGE.test(resource)) return code;
+          if (SERVER_FN_CALLER_CALL.test(code)) checkServerFunctionBase();
+          if (!SERVER_FN_DEFINITION.test(code) || SERVER_FN_CALLER.test(code)) return code;
           throw new Error(
             `${resource} defines a server function that was not compiled for the remote's ` +
               `Node container (${SERVER_CONTAINER_FILENAME}), which would publish its ` +
