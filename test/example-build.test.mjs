@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,6 +15,13 @@ const remoteRequire = createRequire(join(root, "apps", "vite-remote", "package.j
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function readBundleCode(dir) {
+  return readdirSync(dir, { recursive: true })
+    .filter((file) => /\.[cm]?js$/.test(file))
+    .map((file) => readFileSync(join(dir, file), "utf8"))
+    .join("\n");
 }
 
 test("all TanStack Start apps produce client and server builds", () => {
@@ -70,9 +77,11 @@ test("Vite host records the TanStack remote and server-side loader", () => {
   );
   assert.equal(remote?.moduleName, "StatusCard");
 
-  const serverFiles = readFileSync(join(viteHostDist, "server", ".vite", "manifest.json"), "utf8");
-  assert.match(serverFiles, /ssrEntryLoader/);
-  assert.match(serverFiles, /tanstack_vite_remote/);
+  // The loader may be inlined into another chunk, so look for its plugin name in the code
+  // instead of a chunk file name.
+  const serverCode = readBundleCode(join(viteHostDist, "server"));
+  assert.match(serverCode, /mf-vite:ssr-entry-loader/);
+  assert.match(serverCode, /tanstack_vite_remote/);
 });
 
 test("Vite and Rsbuild publish reciprocal client interoperability contracts", () => {
