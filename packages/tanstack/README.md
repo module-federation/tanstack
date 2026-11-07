@@ -165,6 +165,16 @@ Pass `server: true` (or an options object) to federate on the server:
   peer) installed: their server entries are ES modules, loaded by that
   package's SSR loader.
 
+The container is public, so it must not contain server function handlers.
+TanStack Start compiles only its own environments, and the adapter compiles the
+container the way Start compiles a server environment that calls functions
+provided elsewhere: each `createServerFn` handler becomes an RPC caller, and
+the handler stays in the remote's own server output. The build fails if a
+module in the container still defines a server function after that, for
+example with a TanStack Start release whose compiler the adapter cannot load.
+Hosts cannot call a remote's server functions yet (see
+[Known limitations](#known-limitations)).
+
 When a remote's server entry cannot load, the host's runtime plugin throws a
 `RemoteEntryError` whose `phase` is `fetch`, `evaluate`, or `loader` and whose
 `cause` is the original error.
@@ -262,6 +272,15 @@ rendering or hydration recovery instead.
 
 ## Known limitations
 
+- Hosts cannot call a remote's server functions. In the browser, a remote's
+  call goes to its `serverFns.base` on the host's origin, where the host does
+  not know the function, unless something such as a reverse proxy routes the
+  remote's `serverFns.base` to the remote's server. During server rendering,
+  the call throws.
+- A Vite remote's server entry is built by `@module-federation/vite` from the
+  remote's server environment, so it includes the handlers of the server
+  functions its exposed modules import, and it is published with the browser
+  assets. Keep server functions out of modules a Vite remote exposes.
 - In development, a Vite remote's server modules import React from the files
   its dev server resolves, so host and remote must resolve React to the same
   files, as they do in a monorepo. Production builds take React from the

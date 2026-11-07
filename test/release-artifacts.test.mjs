@@ -49,6 +49,7 @@ test("npm package contains only runtime, metadata, and documentation files", () 
     "remote-fetch",
     "rsbuild",
     "runtime",
+    "server-container-rpc",
     "shared",
     "vite",
     "vite-compat",

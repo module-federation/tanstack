@@ -349,6 +349,7 @@ test("Rsbuild SSR remotes ship a Node container with the browser assets", async 
       "rsbuild:module-federation-enhanced",
       "tanstack-start-federation-client-compat",
       "tanstack-start-federation-server-container",
+      "tanstack-start-federation-server-container-functions",
       "rsbuild:module-federation-enhanced",
     ],
   );
