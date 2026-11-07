@@ -39,6 +39,11 @@ const routerCardServerRendered = new Set(["viteHost", "rsbuildSsrHost"]);
 
 const remoteCards = { viteRemote: cards.vite, rsbuildSsrRemote: cards.rsbuildSsr };
 
+// The Rsbuild SSR remote's server function returns this, and its handler runs only on the
+// remote's server.
+const remoteServerAnswer = "Answered by the Rsbuild remote's server";
+const remoteServerFunctionBase = "/_federation/tanstack_rsbuild_ssr_remote/_serverFn/";
+
 /**
  * Starts the six example apps with `script` ("start" for development servers, "preview"
  * for production builds) and registers the shared federation scenarios against them.
@@ -193,6 +198,29 @@ export function describeExamples(script) {
     });
   });
 
+  test("SSR hosts call the Rsbuild remote's server functions while rendering and in the browser", async () => {
+    for (const host of Object.keys(serverRendered)) {
+      // While rendering, the host's copy of the remote's container calls the remote's server.
+      const { body } = await readResponse(
+        await fetch(apps[host].url, { signal: AbortSignal.timeout(60_000) }),
+      );
+      assert.ok(body.includes(remoteServerAnswer), `${host} renders the remote's answer`);
+
+      // In the browser, the remote's code calls the host, which forwards to the remote.
+      await withPage(apps[host].url, async (page) => {
+        await assertInteractive(page, cards.rsbuildSsr);
+        await assertRemoteServerAnswer(page, cards.rsbuildSsr);
+      });
+
+      // Only the host's own pages may use that route.
+      const crossSite = await fetch(new URL(`${remoteServerFunctionBase}any`, apps[host].url), {
+        headers: { "sec-fetch-site": "cross-site", "x-tsr-serverfn": "true" },
+        method: "POST",
+      });
+      assert.equal(crossSite.status, 403, `${host} rejects cross-site calls`);
+    }
+  });
+
   test("remotes work as standalone TanStack Start apps", async () => {
     for (const [key, card] of [
       ["viteRemote", cards.vite],
@@ -202,6 +230,7 @@ export function describeExamples(script) {
       await withPage(apps[key].url, async (page) => {
         await assertInteractive(page, card);
         await assertHostContext(page, [card], "standalone");
+        if (key === "rsbuildSsrRemote") await assertRemoteServerAnswer(page, card);
       });
     }
   });
@@ -379,6 +408,13 @@ async function assertInteractive(page, cardText) {
     [cardText, before + 1],
     { timeout: 5_000 },
   );
+}
+
+/** Asks the remote's server through a remote card and waits for its answer. */
+async function assertRemoteServerAnswer(page, cardText) {
+  const card = page.locator("article", { hasText: cardText });
+  await card.getByRole("button", { name: "Ask the remote's server" }).click();
+  await card.getByText(remoteServerAnswer).waitFor({ timeout: 10_000 });
 }
 
 /** Proves a remote component can render a Link and navigate through the host Router. */

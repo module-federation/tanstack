@@ -1,11 +1,13 @@
 import { useHostName } from "example-host-context";
 import { useEffect, useState } from "react";
+import { getRemoteGreeting } from "../server-functions";
 import "./StatusCard.css";
 
 export default function StatusCard() {
   const hostName = useHostName();
   const [count, setCount] = useState(0);
   const [hydrated, setHydrated] = useState(false);
+  const [answer, setAnswer] = useState<string>();
 
   useEffect(() => {
     setHydrated(true);
@@ -23,6 +25,18 @@ export default function StatusCard() {
       <button type="button" onClick={() => setCount((value) => value + 1)}>
         Remote count {count}
       </button>
+      <button
+        type="button"
+        onClick={() => {
+          getRemoteGreeting().then(
+            ({ message }) => setAnswer(message),
+            () => setAnswer("The remote's server did not answer."),
+          );
+        }}
+      >
+        Ask the remote's server
+      </button>
+      {answer ? <p className="remote-answer">{answer}</p> : null}
     </article>
   );
 }

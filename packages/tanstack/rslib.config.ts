@@ -7,6 +7,7 @@ const entry = {
   rsbuild: "./src/rsbuild.ts",
   runtime: "./src/runtime.ts",
   "server-container-rpc": "./src/server-container-rpc.ts",
+  "server-functions": "./src/server-functions.ts",
   shared: "./src/shared.ts",
   vite: "./src/vite.ts",
   "vite-compat": "./src/vite-compat.ts",

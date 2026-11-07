@@ -16,21 +16,31 @@ const serverRenderedManifests = [
   "http://127.0.0.1:3004/mf-manifest.json",
 ];
 
+// Calls the Rsbuild SSR remote's server function on the server: the remote's container
+// sends it to the remote's server, so the answer is in the initial HTML.
+function askRemoteServer() {
+  return import("tanstack_rsbuild_ssr_remote/serverFunctions")
+    .then(({ getRemoteGreeting }) => getRemoteGreeting())
+    .then(({ message }) => message)
+    .catch(() => null);
+}
+
 export const Route = createFileRoute("/")({
   // Loading the server-rendered remotes before render puts their markup in the response.
   // An unavailable remote must not fail the route: its boundary renders a fallback.
   loader: async () => {
-    const [stylesheets] = await Promise.all([
+    const [stylesheets, remoteAnswer] = await Promise.all([
       Promise.all(
         serverRenderedManifests.map((manifest) =>
           getRemoteStylesheets(manifest, "./StatusCard").catch(() => []),
         ),
       ).then((lists) => lists.flat()),
+      askRemoteServer(),
       import("tanstack_vite_remote/StatusCard").catch(() => null),
       import("tanstack_vite_remote/RouterCard").catch(() => null),
       import("tanstack_rsbuild_ssr_remote/StatusCard").catch(() => null),
     ]);
-    return { stylesheets };
+    return { remoteAnswer, stylesheets };
   },
   // The remote markup arrives with the HTML, so its stylesheets must too. Otherwise it stays
   // unstyled until the remote's JavaScript loads.
@@ -50,6 +60,7 @@ function Home() {
           This page belongs to the Vite host on port 3000. The Vite remote on port 3001 renders its
           card on the server; the Rsbuild remote on port 3002 loads in the browser after hydration.
         </p>
+        <RemoteAnswer />
       </header>
 
       <section className="proof-grid" aria-label="Federation example">
@@ -91,5 +102,14 @@ function RsbuildRemoteSlot() {
     <RemoteBoundary fallback="Loading the Rsbuild remote…" name="Rsbuild remote">
       <RsbuildStatusCard />
     </RemoteBoundary>
+  );
+}
+
+function RemoteAnswer() {
+  const { remoteAnswer } = Route.useLoaderData();
+  return (
+    <p className="remote-server-answer">
+      {remoteAnswer ?? "The Rsbuild SSR remote's server did not answer."}
+    </p>
   );
 }
