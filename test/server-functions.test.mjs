@@ -215,3 +215,40 @@ test("calls from a remote's container use the host's configuration", async () =>
   assert.equal(received[0].url, `${base}fn-7?payload=2`);
   assert.equal(received[0].headers.origin, remoteOrigin);
 });
+
+test("remotes whose server functions share an ID each reach their own server", async () => {
+  // Production builds can give two remotes' functions the same ID, such as one exported
+  // from src/server-functions.ts in both. The remote's name keeps their calls apart.
+  const servers = await Promise.all(
+    ["catalog", "cart"].map(async (name) => {
+      const server = createServer((request, response) => {
+        // Answer out of order, so a response that reached the wrong caller would show.
+        setTimeout(() => response.end(`${name}:${request.url}`), name === "catalog" ? 50 : 0);
+      });
+      await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+      return [name, server, `http://127.0.0.1:${server.address().port}`];
+    }),
+  );
+  try {
+    const { handle } = createRemoteServerFunctions({
+      remotes: Object.fromEntries(servers.map(([name, , origin]) => [name, { origin }])),
+    });
+    const id = "shared-function-id";
+    const calls = servers.flatMap(([name]) => {
+      const path = `${remoteServerFunctionBase(name)}${id}`;
+      return [
+        // From the browser, through the host.
+        handle(call(path, { method: "POST", body: "{}" })).then((response) => response.text()),
+        // From the remote's container while the host renders.
+        fetchRemoteServerFunction(name, path, { method: "POST", body: "{}" }).then((response) =>
+          response.text(),
+        ),
+      ].map((answer) => answer.then((text) => [name, text]));
+    });
+    for (const [name, text] of await Promise.all(calls)) {
+      assert.equal(text, `${name}:${remoteServerFunctionBase(name)}${id}`);
+    }
+  } finally {
+    for (const [, server] of servers) server.close();
+  }
+});

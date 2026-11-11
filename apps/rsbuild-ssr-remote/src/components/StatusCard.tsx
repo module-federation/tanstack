@@ -1,6 +1,6 @@
 import { useHostName } from "example-host-context";
 import { useEffect, useState } from "react";
-import { getRemoteGreeting } from "../server-functions";
+import { getRemoteGreeting, greetHost } from "../server-functions";
 import "./StatusCard.css";
 
 export default function StatusCard() {
@@ -35,6 +35,17 @@ export default function StatusCard() {
         }}
       >
         Ask the remote's server
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          greetHost({ data: { host: hostName } }).then(
+            ({ message }) => setAnswer(message),
+            () => setAnswer("The remote's server did not answer."),
+          );
+        }}
+      >
+        Greet the remote's server
       </button>
       {answer ? <p className="remote-answer">{answer}</p> : null}
     </article>

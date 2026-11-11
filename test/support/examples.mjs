@@ -43,6 +43,9 @@ const remoteCards = { viteRemote: cards.vite, rsbuildSsrRemote: cards.rsbuildSsr
 // remote's server.
 const remoteServerAnswer = "Answered by the Rsbuild remote's server";
 const remoteServerFunctionBase = "/_federation/tanstack_rsbuild_ssr_remote/_serverFn/";
+// Its POST function answers with the host name it received in the call's body.
+const remoteGreeting = (hostName) => `The Rsbuild remote's server greets ${hostName}`;
+const hostNames = { viteHost: "Vite host", rsbuildSsrHost: "Rsbuild SSR host" };
 
 /**
  * Starts the six example apps with `script` ("start" for development servers, "preview"
@@ -200,16 +203,22 @@ export function describeExamples(script) {
 
   test("SSR hosts call the Rsbuild remote's server functions while rendering and in the browser", async () => {
     for (const host of Object.keys(serverRendered)) {
-      // While rendering, the host's copy of the remote's container calls the remote's server.
+      // While rendering, the host's copy of the remote's container calls the remote's server,
+      // with a GET call and a POST call whose body carries the host's name.
       const { body } = await readResponse(
         await fetch(apps[host].url, { signal: AbortSignal.timeout(60_000) }),
       );
       assert.ok(body.includes(remoteServerAnswer), `${host} renders the remote's answer`);
+      assert.ok(
+        body.includes(remoteGreeting(hostNames[host])),
+        `${host} renders the remote's answer to a POST call`,
+      );
 
       // In the browser, the remote's code calls the host, which forwards to the remote.
       await withPage(apps[host].url, async (page) => {
         await assertInteractive(page, cards.rsbuildSsr);
         await assertRemoteServerAnswer(page, cards.rsbuildSsr);
+        await assertRemoteServerGreeting(page, cards.rsbuildSsr, hostNames[host]);
       });
 
       // Only the host's own pages may use that route.
@@ -230,14 +239,41 @@ export function describeExamples(script) {
       await withPage(apps[key].url, async (page) => {
         await assertInteractive(page, card);
         await assertHostContext(page, [card], "standalone");
-        if (key === "rsbuildSsrRemote") await assertRemoteServerAnswer(page, card);
+        if (key === "rsbuildSsrRemote") {
+          await assertRemoteServerAnswer(page, card);
+          await assertRemoteServerGreeting(page, card, "standalone");
+        }
       });
     }
   });
 
   // The last two scenarios stop remotes, then start them again.
   test("hosts fall back while remotes are offline and recover when they return", async () => {
-    await Promise.all(remotes.map((key) => stopApp(processes[key])));
+    // Pages that hydrated before the outage keep the remote's code, so their server function
+    // calls reach the host while the remote's server is down.
+    const openPages = [];
+    try {
+      for (const host of Object.keys(serverRendered)) {
+        const page = await browser.newPage();
+        openPages.push([host, page]);
+        await page.goto(apps[host].url);
+        await assertInteractive(page, cards.rsbuildSsr);
+      }
+
+      await Promise.all(remotes.map((key) => stopApp(processes[key])));
+
+      for (const [host, page] of openPages) {
+        const card = page.locator("article", { hasText: cards.rsbuildSsr });
+        const forwarded = page.waitForResponse((response) =>
+          response.url().includes(remoteServerFunctionBase),
+        );
+        await card.getByRole("button", { name: "Greet the remote's server" }).click();
+        assert.equal((await forwarded).status(), 502, `${host} answers 502 for an offline remote`);
+        await card.getByText("The remote's server did not answer.").waitFor({ timeout: 10_000 });
+      }
+    } finally {
+      await Promise.all(openPages.map(([, page]) => page.close()));
+    }
 
     for (const [host, expected] of [
       [
@@ -282,6 +318,18 @@ export function describeExamples(script) {
       await assertInteractive(page, cards.rsbuildSsr);
       await assertInteractive(page, cards.vite);
     });
+
+    // The remote's server functions answer again, while rendering and in the browser, without
+    // restarting the hosts.
+    for (const host of Object.keys(serverRendered)) {
+      await waitForResponse(apps[host].url, processes[host], ({ body }) =>
+        body.includes(remoteGreeting(hostNames[host])),
+      );
+      await withPage(apps[host].url, async (page) => {
+        await assertInteractive(page, cards.rsbuildSsr);
+        await assertRemoteServerGreeting(page, cards.rsbuildSsr, hostNames[host]);
+      });
+    }
   });
 
   test("SSR hosts that start during an outage render the remotes once they return", async () => {
@@ -415,6 +463,13 @@ async function assertRemoteServerAnswer(page, cardText) {
   const card = page.locator("article", { hasText: cardText });
   await card.getByRole("button", { name: "Ask the remote's server" }).click();
   await card.getByText(remoteServerAnswer).waitFor({ timeout: 10_000 });
+}
+
+/** Sends the host's name to the remote's POST server function and waits for its answer. */
+async function assertRemoteServerGreeting(page, cardText, hostName) {
+  const card = page.locator("article", { hasText: cardText });
+  await card.getByRole("button", { name: "Greet the remote's server" }).click();
+  await card.getByText(remoteGreeting(hostName)).waitFor({ timeout: 10_000 });
 }
 
 /** Proves a remote component can render a Link and navigate through the host Router. */
