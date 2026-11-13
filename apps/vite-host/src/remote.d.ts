@@ -28,4 +28,5 @@ declare module "tanstack_rsbuild_ssr_remote/StatusCard" {
 
 declare module "tanstack_rsbuild_ssr_remote/serverFunctions" {
   export const getRemoteGreeting: () => Promise<{ message: string }>;
+  export const greetHost: (options: { data: { host: string } }) => Promise<{ message: string }>;
 }
