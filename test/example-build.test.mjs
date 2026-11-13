@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +14,7 @@ const rsbuildRemoteDist = join(root, "apps", "rsbuild-remote", "dist");
 const rsbuildSsrHostDist = join(root, "apps", "rsbuild-ssr-host", "dist");
 const rsbuildSsrRemoteDist = join(root, "apps", "rsbuild-ssr-remote", "dist");
 const remoteRequire = createRequire(join(root, "apps", "vite-remote", "package.json"));
+const rootRequire = createRequire(join(root, "package.json"));
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
@@ -86,6 +88,80 @@ test("Rsbuild remote's published server container calls its server functions", (
   assert.match(container, /createSsrRpc\("[0-9a-f]{64}"\)/);
   // Hosts route the remote's calls by its namespaced server function base.
   assert.ok(container.includes('"/_federation/tanstack_rsbuild_ssr_remote/_serverFn/"'));
+});
+
+test("Rsbuild SSR remote publishes types that a host can type-check against", () => {
+  const client = join(rsbuildSsrRemoteDist, "client");
+  const manifest = readJson(join(client, "mf-manifest.json"));
+  // Hosts find the archive through the browser manifest.
+  assert.equal(manifest.metaData.types.zip, "@mf-types.zip");
+  assert.equal(manifest.metaData.types.api, "@mf-types.d.ts");
+
+  // The browser build owns the types: the Node container's directory has none.
+  assert.equal(
+    readdirSync(join(client, "ssr")).some((file) => file.includes("mf-types")),
+    false,
+    "the server container does not generate its own types",
+  );
+
+  // Unpack the archive where a host's consumeTypes would, and compile a host module against
+  // it. The archive's declarations import React and TanStack Start, so the check runs from a
+  // host package that resolves both.
+  const host = join(root, "apps", "rsbuild-ssr-host");
+  const check = join(host, "node_modules", ".cache", "federated-types-check");
+  rmSync(check, { force: true, recursive: true });
+  const types = join(check, "@mf-types", "tanstack_rsbuild_ssr_remote");
+  mkdirSync(types, { recursive: true });
+  execFileSync("unzip", ["-q", join(client, "@mf-types.zip"), "-d", types]);
+  writeFileSync(
+    join(check, "tsconfig.json"),
+    JSON.stringify({
+      compilerOptions: {
+        jsx: "react-jsx",
+        module: "ESNext",
+        moduleResolution: "Bundler",
+        noEmit: true,
+        paths: { "tanstack_rsbuild_ssr_remote/*": ["./@mf-types/tanstack_rsbuild_ssr_remote/*"] },
+        skipLibCheck: true,
+        strict: true,
+        target: "ES2022",
+        types: [],
+      },
+      files: ["consumer.tsx"],
+    }),
+  );
+  writeFileSync(
+    join(check, "consumer.tsx"),
+    `import StatusCard from "tanstack_rsbuild_ssr_remote/StatusCard";
+import { getRemoteGreeting } from "tanstack_rsbuild_ssr_remote/serverFunctions";
+
+export const card = <StatusCard />;
+// @ts-expect-error StatusCard takes no props.
+export const invalid = <StatusCard unknown />;
+
+export async function greeting() {
+  const { message } = await getRemoteGreeting();
+  // The server function's return type keeps its literal value.
+  const exact: "Answered by the Rsbuild remote's server" = message;
+  return exact;
+}
+`,
+  );
+  const typescript = rootRequire.resolve("typescript/package.json");
+  const tsc = join(dirname(typescript), readJson(typescript).bin.tsc);
+  try {
+    execFileSync(process.execPath, [tsc, "-p", check], {
+      cwd: check,
+      encoding: "utf8",
+      stdio: "pipe",
+    });
+  } catch (error) {
+    assert.fail(
+      `the host's module does not type-check:\n${error.stdout ?? ""}${error.stderr ?? ""}`,
+    );
+  } finally {
+    rmSync(check, { force: true, recursive: true });
+  }
 });
 
 test("Vite host records the TanStack remote and server-side loader", () => {

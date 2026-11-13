@@ -324,6 +324,45 @@ export const startInstance = createStart(() => ({
 The build fails when a remote's exposed modules call server functions and its
 `serverFns.base` is not `/_federation/<name>/_serverFn`.
 
+## Federated types
+
+Module Federation's `dts` option works with the Rsbuild adapter. A remote's
+browser build generates its types, `@mf-types.zip` and `@mf-types.d.ts`, next
+to `mf-manifest.json`, which advertises them. The remote's Node container never
+generates its own. The archive declares the exposed modules as compiled from
+source, so a server function keeps its return type, literal values included:
+
+```ts
+// The remote's rsbuild.config.ts
+tanstackStartModuleFederation({
+  federation: {
+    name: "catalog",
+    exposes: { "./serverFunctions": "./src/server-functions.ts" },
+    dts: { generateTypes: { abortOnError: true }, consumeTypes: false },
+  },
+  server: true,
+});
+```
+
+A host consumes them with `dts.consumeTypes`, which downloads each archive
+through the remote's manifest into `@mf-types/<remote>/`, so the remotes must
+be reachable when the host builds or starts its development server. Point the
+host's `tsconfig.json` at the downloaded types:
+
+```json
+{ "compilerOptions": { "paths": { "catalog/*": ["./@mf-types/catalog/*"] } } }
+```
+
+The generated declarations import the remote's own dependencies, such as
+`@tanstack/react-start`, so the host must resolve the same packages. The host
+also needs `skipLibCheck`: Module Federation's generator keeps stylesheet
+imports in the declarations and re-exports a `default` from every exposed
+module, including modules without one.
+
+In a monorepo that builds hosts and remotes in parallel, build the remotes and
+serve their output before the host build, or keep handwritten declarations for
+the remote modules, as the examples here do.
+
 ## Known limitations
 
 - Remote server functions use the host's serialization adapters while the host

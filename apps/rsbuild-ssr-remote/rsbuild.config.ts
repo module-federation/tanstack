@@ -17,7 +17,7 @@ export default defineConfig({
     ...tanstackStartModuleFederation({
       federation: {
         dev: { disableDynamicRemoteTypeHints: true },
-        dts: false,
+        dts: { generateTypes: { abortOnError: true }, consumeTypes: false },
         exposes: {
           "./StatusCard": "./src/components/StatusCard.tsx",
           "./serverFunctions": "./src/server-functions.ts",
