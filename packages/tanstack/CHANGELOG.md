@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0 (2026-11-13)
+
+## What's Changed
+* test: assert SSR loader in bundle by @gioboa in https://github.com/module-federation/tanstack/pull/17
+* fix(rsbuild): keep server function handlers out of the remote's Node container by @Nsttt in https://github.com/module-federation/tanstack/pull/18
+* feat: route a remote's server functions to its own server by @Nsttt in https://github.com/module-federation/tanstack/pull/19
+* test: cover POST calls, outages, and shared IDs for remote server functions by @Nsttt in https://github.com/module-federation/tanstack/pull/21
+* feat(rsbuild): publish an SSR remote's types and prove hosts can consume them by @Nsttt in https://github.com/module-federation/tanstack/pull/22
+
+## New Contributors
+* @gioboa made their first contribution in https://github.com/module-federation/tanstack/pull/17
+
+**Full Changelog**: https://github.com/module-federation/tanstack/compare/0.1.1...0.2.0
+
 ## 0.1.1 (2026-10-14)
 
 ## What's Changed
