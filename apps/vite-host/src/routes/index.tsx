@@ -16,12 +16,15 @@ const serverRenderedManifests = [
   "http://127.0.0.1:3004/mf-manifest.json",
 ];
 
-// Calls the Rsbuild SSR remote's server function on the server: the remote's container
-// sends it to the remote's server, so the answer is in the initial HTML.
+// Calls the Rsbuild SSR remote's server functions on the server: the remote's container
+// sends them to the remote's server, so the answers are in the initial HTML. The POST call
+// carries this host's name in its body.
 function askRemoteServer() {
   return import("tanstack_rsbuild_ssr_remote/serverFunctions")
-    .then(({ getRemoteGreeting }) => getRemoteGreeting())
-    .then(({ message }) => message)
+    .then(({ getRemoteGreeting, greetHost }) =>
+      Promise.all([getRemoteGreeting(), greetHost({ data: { host: "Vite host" } })]),
+    )
+    .then((answers) => answers.map(({ message }) => message))
     .catch(() => null);
 }
 
@@ -107,9 +110,12 @@ function RsbuildRemoteSlot() {
 
 function RemoteAnswer() {
   const { remoteAnswer } = Route.useLoaderData();
-  return (
-    <p className="remote-server-answer">
-      {remoteAnswer ?? "The Rsbuild SSR remote's server did not answer."}
+  if (!remoteAnswer) {
+    return <p className="remote-server-answer">The Rsbuild SSR remote's server did not answer.</p>;
+  }
+  return remoteAnswer.map((message) => (
+    <p className="remote-server-answer" key={message}>
+      {message}
     </p>
-  );
+  ));
 }
