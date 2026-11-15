@@ -168,9 +168,11 @@ Fixed upstream in `@module-federation/vite` 1.23.3:
       ship. Uses TanStack Start's private Rsbuild compiler host
       (`@tanstack/start-plugin-core/dist/esm/rsbuild/start-compiler-host.js`);
       ask TanStack for a public way to compile an extra caller environment.
-- [ ] Keep server function handlers out of a Vite remote's published SSR entry.
-      `@module-federation/vite` builds it from the remote's server environment,
-      where TanStack Start compiles handlers in place.
+- [x] Keep server function handlers out of a Vite remote's published SSR entry.
+      `@module-federation/vite` builds it in a dedicated `mf_server` environment
+      (its internal `ssrEnvironment` option), which the adapter compiles as a
+      server-function caller with TanStack Start's private Vite compiler
+      (`@tanstack/start-plugin-core/dist/esm/vite/start-compiler-plugin/plugin.js`).
 - [x] Route an Rsbuild remote's server-function calls to the remote's server:
       browser calls through `createRemoteServerFunctions().handle` in the host's
       request middleware (or a reverse proxy), and server-rendering calls over

@@ -90,6 +90,24 @@ test("Rsbuild remote's published server container calls its server functions", (
   assert.ok(container.includes('"/_federation/tanstack_rsbuild_ssr_remote/_serverFn/"'));
 });
 
+test("Vite remote's published SSR entry calls its server functions", () => {
+  const client = join(viteRemoteDist, "client");
+  const manifest = readJson(join(client, "mf-manifest.json"));
+  assert.ok(manifest.exposes.find(({ path }) => path === "./serverFunctions"));
+
+  // The SSR entry ships with the browser assets, so a handler compiled into it would be
+  // public. TanStack Start replaces each handler with an RPC caller instead, and the
+  // handler stays in the remote's own server output.
+  const published = readBundleCode(client);
+  assert.doesNotMatch(published, /Answered by the Vite remote's server/);
+  assert.match(published, /createSsrRpc\("[0-9a-f]{64}"\)/);
+  assert.ok(published.includes('"/_federation/tanstack_vite_remote/_serverFn/"'));
+  assert.match(
+    readBundleCode(join(viteRemoteDist, "server")),
+    /Answered by the Vite remote's server/,
+  );
+});
+
 test("Rsbuild SSR remote publishes types that a host can type-check against", () => {
   const client = join(rsbuildSsrRemoteDist, "client");
   const manifest = readJson(join(client, "mf-manifest.json"));

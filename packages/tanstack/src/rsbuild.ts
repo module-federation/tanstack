@@ -1,5 +1,4 @@
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   pluginModuleFederation,
@@ -7,7 +6,12 @@ import {
 } from "@module-federation/rsbuild-plugin";
 import type { RsbuildPlugin } from "@rsbuild/core";
 import type { NodeEntryLoaderOptions } from "./node-entry-loader";
-import { remoteServerFunctionBase } from "./server-functions";
+import {
+  createServerContainerCheck,
+  resolveStartPluginCore,
+  SERVER_CONTAINER_RPC,
+  SERVER_FN_BASE_DEFINE,
+} from "./server-container";
 import { defaultShared, eagerShared, resolveShared, tanstackStartSharedPackages } from "./shared";
 
 type ModuleFederationOverride = Partial<ModuleFederationOptions>;
@@ -52,7 +56,6 @@ const SERVER_CONTAINER_FILENAME = "remoteEntry.ssr.cjs";
 const SERVER_CHUNK_DIR = "ssr";
 const SERVER_CONTAINER_ENVIRONMENT = "mf-server";
 const NODE_ENTRY_LOADER = "@module-federation/tanstack/node-entry-loader";
-const SERVER_CONTAINER_RPC = "@module-federation/tanstack/server-container-rpc";
 
 /** Creates browser and optional SSR federation adapters for TanStack Start's Rsbuild integration. */
 export function tanstackStartModuleFederation({
@@ -282,10 +285,10 @@ async function loadStartCompiler(
   root: string,
 ): Promise<RegisterStartCompilerTransforms | undefined> {
   try {
-    const appRequire = createRequire(join(root, "package.json"));
-    const startRequire = createRequire(appRequire.resolve("@tanstack/react-start/package.json"));
-    const corePackage = startRequire.resolve("@tanstack/start-plugin-core/package.json");
-    const compilerHost = join(dirname(corePackage), "dist/esm/rsbuild/start-compiler-host.js");
+    const compilerHost = join(
+      resolveStartPluginCore(root),
+      "dist/esm/rsbuild/start-compiler-host.js",
+    );
     const { registerStartCompilerTransforms } = await import(pathToFileURL(compilerHost).href);
     return typeof registerStartCompilerTransforms === "function"
       ? registerStartCompilerTransforms
@@ -294,13 +297,6 @@ async function loadStartCompiler(
     return undefined;
   }
 }
-
-const SERVER_FN_DEFINITION = /\bcreateServerFn\b/;
-const SERVER_FN_CALLER = /\bcreateSsrRpc\b/;
-// A compiled caller passes its function ID as a string literal.
-const SERVER_FN_CALLER_CALL = /\bcreateSsrRpc\(\s*["'`]/;
-const SERVER_FN_BASE_DEFINE = "process.env.TSS_SERVER_FN_BASE";
-const TANSTACK_PACKAGE = /[\\/]node_modules[\\/]@tanstack[\\/]/;
 
 /**
  * Keeps server function handlers out of a remote's Node container, which is published with
@@ -340,41 +336,21 @@ function serverContainerFunctionsPlugin({
         });
       });
 
-      const expectedBase = remoteServerFunctionBase(remoteName);
-      let checkedBase = false;
-      const checkServerFunctionBase = () => {
-        if (checkedBase) return;
-        const { define } = api.getNormalizedConfig({
-          environment: SERVER_CONTAINER_ENVIRONMENT,
-        }).source;
-        const base = define[SERVER_FN_BASE_DEFINE];
-        if (base !== JSON.stringify(expectedBase)) {
-          throw new Error(
-            `Remote "${remoteName}" exposes modules that call server functions, so hosts must ` +
-              "be able to route those calls to its server. Set " +
-              `tanstackStart({ serverFns: { base: "${expectedBase.slice(0, -1)}" } }) ` +
-              `in the remote (its server function base is ${String(base)}).`,
-          );
-        }
-        checkedBase = true;
-      };
+      const check = createServerContainerCheck({
+        compilerLoaded: Boolean(registerStartCompilerTransforms),
+        container: SERVER_CONTAINER_FILENAME,
+        getServerFunctionBase: () =>
+          api.getNormalizedConfig({ environment: SERVER_CONTAINER_ENVIRONMENT }).source.define[
+            SERVER_FN_BASE_DEFINE
+          ],
+        remoteName,
+      });
 
       api.transform(
         { environments: [SERVER_CONTAINER_ENVIRONMENT], test: /\.[cm]?[jt]sx?$/ },
         ({ code, resource }) => {
-          if (TANSTACK_PACKAGE.test(resource)) return code;
-          if (SERVER_FN_CALLER_CALL.test(code)) checkServerFunctionBase();
-          if (!SERVER_FN_DEFINITION.test(code) || SERVER_FN_CALLER.test(code)) return code;
-          throw new Error(
-            `${resource} defines a server function that was not compiled for the remote's ` +
-              `Node container (${SERVER_CONTAINER_FILENAME}), which would publish its ` +
-              "handler with the browser assets." +
-              (registerStartCompilerTransforms
-                ? ""
-                : " @module-federation/tanstack could not load TanStack Start's compiler " +
-                  "from @tanstack/start-plugin-core; this TanStack Start version is not " +
-                  "supported."),
-          );
+          check(code, resource);
+          return code;
         },
       );
     },

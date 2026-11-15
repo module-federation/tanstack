@@ -6,6 +6,7 @@ const entry = {
   "remote-fetch": "./src/remote-fetch.ts",
   rsbuild: "./src/rsbuild.ts",
   runtime: "./src/runtime.ts",
+  "server-container": "./src/server-container.ts",
   "server-container-rpc": "./src/server-container-rpc.ts",
   "server-functions": "./src/server-functions.ts",
   shared: "./src/shared.ts",

@@ -51,6 +51,7 @@ test("npm package contains only runtime, metadata, and documentation files", () 
     "remote-fetch",
     "rsbuild",
     "runtime",
+    "server-container",
     "server-container-rpc",
     "server-functions",
     "shared",

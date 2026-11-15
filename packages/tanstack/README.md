@@ -172,7 +172,10 @@ provided elsewhere: each `createServerFn` handler becomes an RPC caller, and
 the handler stays in the remote's own server output. The build fails if a
 module in the container still defines a server function after that, for
 example with a TanStack Start release whose compiler the adapter cannot load.
-The remote's server keeps answering those calls; see
+A Vite remote's published SSR entry, `remoteEntry.ssr.js`, gets the same
+treatment: the adapter has `@module-federation/vite` build it in its own
+`mf_server` environment (`dist/mf_server`, copied next to the browser assets),
+compiled as a caller. The remote's server keeps answering those calls; see
 [Remote server functions](#remote-server-functions).
 
 When a remote's server entry cannot load, the host's runtime plugin throws a
@@ -272,14 +275,14 @@ rendering or hydration recovery instead.
 
 ## Remote server functions
 
-An Rsbuild remote's exposed modules can call the remote's `createServerFn`
+A remote's exposed modules can call the remote's `createServerFn`
 functions, and the calls run on the remote's server, wherever a host renders
 them. The remote's code calls its server function base on the page's origin,
 which is the host's, so the remote gives its server functions a base the host
 can recognize, and the host forwards those calls:
 
 ```ts
-// The remote's rsbuild.config.ts. The base is /_federation/<federation name>/_serverFn.
+// The remote's vite.config.ts or rsbuild.config.ts. The base is /_federation/<federation name>/_serverFn.
 tanstackStart({ serverFns: { base: "/_federation/catalog/_serverFn" } });
 ```
 
@@ -368,10 +371,6 @@ the remote modules, as the examples here do.
 - Remote server functions use the host's serialization adapters while the host
   renders, so values that need the remote's own adapters do not cross. Remotes
   that use a router `basepath` are not supported.
-- A Vite remote's server entry is built by `@module-federation/vite` from the
-  remote's server environment, so it includes the handlers of the server
-  functions its exposed modules import, and it is published with the browser
-  assets. Keep server functions out of modules a Vite remote exposes.
 - In development, a Vite remote's server modules import React from the files
   its dev server resolves, so host and remote must resolve React to the same
   files, as they do in a monorepo. Production builds take React from the

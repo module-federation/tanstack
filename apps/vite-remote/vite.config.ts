@@ -15,9 +15,11 @@ export default defineConfig({
       exposes: {
         "./RouterCard": "./src/components/RouterCard.tsx",
         "./StatusCard": "./src/components/StatusCard.tsx",
+        "./serverFunctions": "./src/server-functions.ts",
       },
     }),
-    tanstackStart(),
+    // Hosts forward calls under /_federation/<federation name>/_serverFn to this server.
+    tanstackStart({ serverFns: { base: "/_federation/tanstack_vite_remote/_serverFn" } }),
     react(),
   ],
   server: {
