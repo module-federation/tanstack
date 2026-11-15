@@ -123,6 +123,17 @@ function serverEntryFunctionsPlugins(remoteName: string): Plugin[] {
     {
       name: "tanstack-start-federation:server-entry-functions",
       apply: "build",
+      configResolved(config) {
+        // `@module-federation/vite` before 1.24.1 ignores `ssrEnvironment` and builds the
+        // published SSR entry in Start's `ssr` environment, with the handlers in it.
+        if (!config.environments[SERVER_ENTRY_ENVIRONMENT]) {
+          throw new Error(
+            `@module-federation/tanstack requires @module-federation/vite 1.24.1 or later ` +
+              `to keep server function handlers out of remote "${remoteName}"'s published ` +
+              `SSR entry.`,
+          );
+        }
+      },
       configEnvironment(name) {
         if (name !== SERVER_ENTRY_ENVIRONMENT) return;
         return {

@@ -75,9 +75,10 @@ the remotes once they return.
       is `^8.0.0`, and the adapter stops with an error on older versions: on
       Vite 7, `@module-federation/vite` hangs server-side remote loads in
       development and emits an unresolved `virtual:` import in production.
-- [x] Require `@module-federation/vite` 1.23.3, which ships the fixes for the
+- [x] Require `@module-federation/vite` 1.24.1, which ships the fixes for the
       problems found here (see "Fixed upstream" below), so the adapter needs
-      no workarounds for it.
+      no workarounds for it, and builds a remote's published SSR entry in the
+      `mf_server` environment.
 
 ### SSR quality and hardening
 

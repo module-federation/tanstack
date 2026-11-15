@@ -386,7 +386,7 @@ the remote modules, as the examples here do.
   of 1.168 its Rsbuild server build fails with it: TanStack Router imports
   React's `use`, which React 18 lacks. React 18 with Vite builds but is
   untested.
-- Vite: `@module-federation/vite` 1.23.3+ and `vite` 8.
+- Vite: `@module-federation/vite` 1.24.1+ and `vite` 8.
 - Rsbuild: `@module-federation/rsbuild-plugin` and `@rsbuild/core`. An Rsbuild
   host that renders Vite remotes on the server also needs
-  `@module-federation/vite` 1.23.3+ and `vite`.
+  `@module-federation/vite` 1.24.1+ and `vite`.
