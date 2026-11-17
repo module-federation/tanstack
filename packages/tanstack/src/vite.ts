@@ -47,8 +47,34 @@ export function tanstackStartModuleFederation(
       // Internal `@module-federation/vite` option, not part of its public types.
       ...(isRemote ? { ssrEnvironment: SERVER_ENTRY_ENVIRONMENT } : {}),
     } as ModuleFederationOptions),
+    devServerFunctionBasePlugin(),
     ...(isRemote ? serverEntryFunctionsPlugins(configured.name) : []),
   ];
+}
+
+/**
+ * Keeps each app's server function base in its own browser code during development. Vite's
+ * dev server does not replace `define` entries in client code: its `/@vite/env` script
+ * assigns them to `globalThis`. A page that loads a Vite remote's dev modules runs the host's
+ * script and the remote's, so whichever runs last sets `process.env.TSS_SERVER_FN_BASE` for
+ * both apps, and one app's server function calls go to the other's base. Production builds
+ * replace the entry in place, which this does in development too.
+ */
+function devServerFunctionBasePlugin(): Plugin {
+  return {
+    name: "tanstack-start-federation:dev-server-fn-base",
+    apply: "serve",
+    applyToEnvironment: (environment) => environment.config.consumer === "client",
+    transform: {
+      filter: { code: SERVER_FN_BASE_DEFINE },
+      handler(code) {
+        const base = this.environment.config.define?.[SERVER_FN_BASE_DEFINE];
+        if (typeof base !== "string") return;
+        // The base fits on the replaced line, so line mappings stay intact.
+        return { code: code.replaceAll(SERVER_FN_BASE_DEFINE, base), map: null };
+      },
+    },
+  };
 }
 
 function resolveViteShared(shared: ModuleFederationOptions["shared"], isHost: boolean) {

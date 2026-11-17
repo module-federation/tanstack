@@ -191,6 +191,29 @@ test("the Vite adapter fails fast on Vite 7", () => {
   assert.doesNotThrow(() => plugin.config.call({ meta: { viteVersion: "8.3.2" } }));
 });
 
+test("Vite dev servers inline each app's server function base in its client code", () => {
+  // Vite's dev client assigns `define` entries to globalThis, so a host and a Vite remote
+  // in one page would share whichever base loaded last.
+  const plugin = vitePlugin("tanstack-start-federation:dev-server-fn-base");
+  assert.equal(plugin.apply, "serve");
+  const environment = (consumer) => ({
+    config: {
+      consumer,
+      define: { "process.env.TSS_SERVER_FN_BASE": JSON.stringify("/_serverFn/") },
+    },
+  });
+  assert.equal(plugin.applyToEnvironment(environment("client")), true);
+  assert.equal(plugin.applyToEnvironment(environment("server")), false);
+
+  const code = "const url = process.env.TSS_SERVER_FN_BASE + functionId;";
+  assert.ok(code.includes(plugin.transform.filter.code));
+  const { code: inlined } = plugin.transform.handler.call(
+    { environment: environment("client") },
+    code,
+  );
+  assert.equal(inlined, 'const url = "/_serverFn/" + functionId;');
+});
+
 test("Rsbuild shared defaults never mutate caller overrides", () => {
   const callerShared = { react: { eager: false, singleton: false } };
   const before = structuredClone(callerShared);
