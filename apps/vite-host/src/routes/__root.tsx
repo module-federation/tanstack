@@ -1,7 +1,9 @@
-import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import { createRootRoute, HeadContent, Link, Outlet, Scripts } from "@tanstack/react-router";
 import { HostContext } from "example-host-context";
 import type { ReactNode } from "react";
 import stylesHref from "../styles.css?url";
+
+const HOST_NAME = "Vite host";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -18,7 +20,14 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <RootDocument>
-      <HostContext.Provider value="Vite host">
+      <HostContext.Provider value={HOST_NAME}>
+        <nav className="site-nav" aria-label="Host pages">
+          <span className="host-badge">{HOST_NAME} · :3000</span>
+          <Link to="/" activeOptions={{ exact: true, includeHash: false }}>
+            Remotes
+          </Link>
+          <Link to="/visitor">Visitor</Link>
+        </nav>
         <Outlet />
       </HostContext.Provider>
     </RootDocument>

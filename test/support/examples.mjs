@@ -46,6 +46,14 @@ const remoteServerFunctionBase = "/_federation/tanstack_rsbuild_ssr_remote/_serv
 // Its POST function answers with the host name it received in the call's body.
 const remoteGreeting = (hostName) => `The Rsbuild remote's server greets ${hostName}`;
 const hostNames = { viteHost: "Vite host", rsbuildSsrHost: "Rsbuild SSR host" };
+// Its visitor function reports the visitor the host forwarded in a header.
+const remoteSeesVisitor = (visitor) =>
+  `The Rsbuild remote's server sees ${visitor ?? "an anonymous visitor"}`;
+
+// A Suspense boundary that was still pending when the shell flushed: its content arrives
+// later in a hidden segment, which only JavaScript reveals. Remotes a route loader preloads
+// with lazyRemote render inline instead.
+const hiddenSegment = /<!--\$\?-->|<div hidden id="S:/;
 
 /**
  * Starts the six example apps with `script` ("start" for development servers, "preview"
@@ -100,6 +108,7 @@ export function describeExamples(script) {
           remoteKeys.length,
           `${host} renders every remote on the server`,
         );
+        assert.doesNotMatch(body, hiddenSegment, `${host} renders its remotes inline`);
       }
     }
   });
@@ -122,12 +131,10 @@ export function describeExamples(script) {
       const styled = remoteKeys.filter((remote) => stylesheets[remote].length > 0);
       if (script === "preview") assert.deepEqual(styled, remoteKeys, host);
 
+      // Without JavaScript, only markup the server rendered inline is visible.
       const context = await browser.newContext({ javaScriptEnabled: false });
       try {
         const page = await context.newPage();
-        // Without JavaScript, streamed Suspense content stays hidden, so warm the host up
-        // first: once its remotes are loaded, it renders them inline.
-        await fetch(apps[host].url, { signal: AbortSignal.timeout(60_000) });
         await page.goto(apps[host].url);
         const loaded = await page.evaluate(() => [...document.styleSheets].map(({ href }) => href));
 
@@ -227,6 +234,52 @@ export function describeExamples(script) {
         method: "POST",
       });
       assert.equal(crossSite.status, 403, `${host} rejects cross-site calls`);
+    }
+  });
+
+  test("SSR hosts send remotes the signed-in visitor and keep their cookies", async () => {
+    for (const host of Object.keys(serverRendered)) {
+      const visitorPage = new URL("visitor", apps[host].url).href;
+      const render = async (headers) => {
+        const { body, status } = await readResponse(
+          await fetch(visitorPage, { headers, signal: AbortSignal.timeout(60_000) }),
+        );
+        assert.equal(status, 200, host);
+        assert.match(body, /Cookies received<\/dt><dd>none<\/dd>/, `${host} forwards no cookie`);
+        return body;
+      };
+
+      // While rendering, the host's server tells the remote's server who is signed in.
+      assert.ok((await render()).includes(remoteSeesVisitor(null)), host);
+      const signedIn = await render({ cookie: "example_visitor=Ada; host_session=secret" });
+      assert.ok(signedIn.includes(remoteSeesVisitor("Ada")), `${host} forwards the visitor`);
+
+      await withPage(visitorPage, async (page) => {
+        await page.evaluate(() => {
+          window.sameDocument = true;
+        });
+        // Signing in runs the route loader again in the browser, so the remote's server
+        // function call passes through the host, which adds the visitor header.
+        const forwarded = [];
+        page.on("response", (response) => {
+          if (response.url().includes(remoteServerFunctionBase)) forwarded.push(response.status());
+        });
+        await clickUntil(page, page.getByRole("button", { name: "Sign in as Grace" }), () =>
+          page.getByText(remoteSeesVisitor("Grace")).isVisible(),
+        );
+        assert.ok(forwarded.includes(200), `${host} forwards the browser's call`);
+        assert.equal(
+          await page.locator("dt:text-is('Cookies received') + dd").textContent(),
+          "none",
+          `${host} forwards no cookie from the browser`,
+        );
+
+        // Client-side navigation loads the remotes this page did not render.
+        await page.getByRole("link", { name: "Remotes" }).click();
+        await assertInteractive(page, cards.rsbuildSsr);
+        await assertHostContext(page, [cards.rsbuildSsr], hostNames[host]);
+        assert.equal(await page.evaluate(() => window.sameDocument), true, `${host} navigated`);
+      });
     }
   });
 
@@ -378,6 +431,7 @@ export function describeExamples(script) {
         remoteKeys.length,
         `${host} renders its remotes on the server ${when}`,
       );
+      assert.doesNotMatch(body, hiddenSegment, `${host} renders its remotes inline ${when}`);
       if (routerCardServerRendered.has(host)) {
         assert.ok(body.includes("Remote uses the host router"), `${host} renders ${routerCard}`);
       }
@@ -456,6 +510,19 @@ async function assertInteractive(page, cardText) {
     [cardText, before + 1],
     { timeout: 5_000 },
   );
+}
+
+/**
+ * Clicks `target` until `done` holds. A server-rendered button ignores clicks until React
+ * hydrates it.
+ */
+async function clickUntil(page, target, done) {
+  const deadline = Date.now() + 20_000;
+  while (!(await done())) {
+    assert.ok(Date.now() < deadline, "the page never responded to the click");
+    if (await target.isEnabled()) await target.click();
+    await page.waitForTimeout(250);
+  }
 }
 
 /** Asks the remote's server through a remote card and waits for its answer. */

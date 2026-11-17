@@ -2,6 +2,7 @@ import { getRemoteStylesheets, lazyRemote } from "@module-federation/tanstack/ru
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { RemoteBoundary } from "../components/RemoteBoundary";
+import { ServerAnswers } from "../components/ServerAnswers";
 
 // Unlike React.lazy, lazyRemote loads again after a failure, so a server that hit a remote
 // outage renders the remote once it is back.
@@ -29,8 +30,8 @@ function askRemoteServer() {
 }
 
 export const Route = createFileRoute("/")({
-  // Loading the server-rendered remotes before render puts their markup in the response.
-  // An unavailable remote must not fail the route: its boundary renders a fallback.
+  // Preloading the server-rendered remotes before render streams their markup inline in the
+  // response. An unavailable remote must not fail the route: its boundary renders a fallback.
   loader: async () => {
     const [stylesheets, remoteAnswer] = await Promise.all([
       Promise.all(
@@ -39,9 +40,9 @@ export const Route = createFileRoute("/")({
         ),
       ).then((lists) => lists.flat()),
       askRemoteServer(),
-      import("tanstack_vite_remote/StatusCard").catch(() => null),
-      import("tanstack_vite_remote/RouterCard").catch(() => null),
-      import("tanstack_rsbuild_ssr_remote/StatusCard").catch(() => null),
+      RemoteStatusCard.preload().catch(() => null),
+      RemoteRouterCard.preload().catch(() => null),
+      RsbuildSsrStatusCard.preload().catch(() => null),
     ]);
     return { remoteAnswer, stylesheets };
   },
@@ -54,16 +55,19 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
+  const { remoteAnswer } = Route.useLoaderData();
+
   return (
     <main className="page-shell">
       <header className="hero">
         <p className="eyebrow">TanStack Start × Module Federation</p>
         <h1>Two full-stack apps. One React tree.</h1>
         <p className="lede">
-          This page belongs to the Vite host on port 3000. The Vite remote on port 3001 renders its
-          card on the server; the Rsbuild remote on port 3002 loads in the browser after hydration.
+          This page belongs to the Vite host on port 3000. The Vite remote (3001) and the Rsbuild
+          SSR remote (3004) render on this server; the Rsbuild remote (3002) loads in the browser
+          after hydration. Answers from the Rsbuild SSR remote's own server arrive with the HTML:
         </p>
-        <RemoteAnswer />
+        <ServerAnswers answers={remoteAnswer} />
       </header>
 
       <section className="proof-grid" aria-label="Federation example">
@@ -71,7 +75,10 @@ function Home() {
           <span className="card-index">01</span>
           <p className="card-label">Host route</p>
           <h2>Rendered by TanStack Start</h2>
-          <p>The route, document shell, and server response come from the host app.</p>
+          <p>
+            The route, document shell, and server response come from the host app. Every remote sits
+            behind its own error boundary, so stopping one leaves the rest of the page intact.
+          </p>
         </article>
 
         <RemoteBoundary fallback="Loading the remote app…" name="Vite remote">
@@ -106,16 +113,4 @@ function RsbuildRemoteSlot() {
       <RsbuildStatusCard />
     </RemoteBoundary>
   );
-}
-
-function RemoteAnswer() {
-  const { remoteAnswer } = Route.useLoaderData();
-  if (!remoteAnswer) {
-    return <p className="remote-server-answer">The Rsbuild SSR remote's server did not answer.</p>;
-  }
-  return remoteAnswer.map((message) => (
-    <p className="remote-server-answer" key={message}>
-      {message}
-    </p>
-  ));
 }

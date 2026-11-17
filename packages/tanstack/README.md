@@ -221,9 +221,9 @@ revalidation only for remotes whose evaluation is safe to repeat.
 
 ## Rendering remotes on the server
 
-Hosts on either bundler render remotes the same way: load the remote in the
-route `loader`, render it with `lazyRemote` inside a Suspense and error
-boundary, and link its stylesheets from the route's `head`:
+Hosts on either bundler render remotes the same way: wrap the remote in
+`lazyRemote`, preload it in the route `loader`, render it inside a Suspense and
+error boundary, and link its stylesheets from the route's `head`:
 
 ```tsx
 import { getRemoteStylesheets, lazyRemote } from "@module-federation/tanstack/runtime";
@@ -232,12 +232,12 @@ import { createFileRoute } from "@tanstack/react-router";
 const StatusCard = lazyRemote(() => import("remote/StatusCard"));
 
 export const Route = createFileRoute("/")({
-  // Loading the remote before rendering puts its markup in the server response.
-  // Catch route-loader failures so an unavailable remote does not fail the route.
+  // Preloading the remote before rendering streams its markup inline in the server
+  // response. Catch route-loader failures so an unavailable remote does not fail the route.
   loader: async () => {
     const [stylesheets] = await Promise.all([
       getRemoteStylesheets("https://remote.test/mf-manifest.json", "./StatusCard").catch(() => []),
-      import("remote/StatusCard").catch(() => null),
+      StatusCard.preload().catch(() => null),
     ]);
     return { stylesheets };
   },
@@ -260,9 +260,18 @@ rendering or hydration recovery instead.
 
 - **`lazyRemote(load, { retryAfterMs })`** is `React.lazy` for remotes. A
   `React.lazy` component that fails once stays rejected until its lazy instance
-  is recreated. `lazyRemote` recreates it on the first render after
-  `retryAfterMs` (5 seconds by default), so a later request can retry a remote
-  that recovered. This retry policy does not make an SSR error boundary render
+  is recreated. `lazyRemote` recreates it on the first render or `preload()`
+  after `retryAfterMs` (5 seconds by default), so a later request can retry a
+  remote that recovered.
+- **`Component.preload()`**, on every `lazyRemote` component, loads the remote
+  now and resolves with its module; await it in the route loader. A component
+  that has not loaded yet suspends on its first render, even when the module is
+  already cached, and a streaming server then sends its markup in a hidden
+  segment that only JavaScript reveals: the first request after a server
+  starts, and the first after a remote recovers. Once `preload()` resolves, the
+  component renders the module directly. `preload()` shares load attempts,
+  failures, and `retryAfterMs` with rendering, so a loader and a render never
+  load a remote twice. This retry policy does not make an SSR error boundary render
   its fallback. The import itself loads again after a failure too: `@module-federation/vite`
   1.23.3+ retries failed server loads, and the Rsbuild adapter removes a failed
   remote module from Rspack's module cache.
@@ -318,8 +327,13 @@ export const startInstance = createStart(() => ({
 - The remote's server checks that calls come from its own origin, so both
   paths present the remote's origin to it.
 - Cookies and authorization headers reach the remote only when the remote's
-  `headers` option returns them. It receives the request the host is handling:
-  `headers: ({ request }) => ({ cookie: request?.headers.get("cookie") ?? "" })`.
+  `headers` option returns them. It receives the request the host is handling,
+  in the browser path and while rendering, so it can send exactly what the
+  remote needs: `headers: ({ request }) => ({ "x-user": userFrom(request) })`.
+  The host's cookies belong to the host's origin; forward the whole `cookie`
+  header only when the remote should see all of them. The `/visitor` page of
+  the SSR examples shows the pattern. A remote that trusts such a header must
+  only accept it from the host, for example on a private network.
 - `timeoutMs` (10 seconds by default) bounds the wait for the remote's response
   headers, not a streamed body. An unreachable or slow remote answers `502` in
   the browser and rejects during server rendering.

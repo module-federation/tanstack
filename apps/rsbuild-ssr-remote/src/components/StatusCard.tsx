@@ -22,31 +22,33 @@ export default function StatusCard() {
       <h2>Server-rendered by an Rsbuild remote.</h2>
       <p>The host's server loaded this card from the remote's async-node container.</p>
       <p className="host-name">Host: {hostName}</p>
-      <button type="button" onClick={() => setCount((value) => value + 1)}>
-        Remote count {count}
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          getRemoteGreeting().then(
-            ({ message }) => setAnswer(message),
-            () => setAnswer("The remote's server did not answer."),
-          );
-        }}
-      >
-        Ask the remote's server
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          greetHost({ data: { host: hostName } }).then(
-            ({ message }) => setAnswer(message),
-            () => setAnswer("The remote's server did not answer."),
-          );
-        }}
-      >
-        Greet the remote's server
-      </button>
+      <div className="card-actions">
+        <button type="button" onClick={() => setCount((value) => value + 1)}>
+          Remote count {count}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            getRemoteGreeting().then(
+              ({ message }) => setAnswer(message),
+              () => setAnswer("The remote's server did not answer."),
+            );
+          }}
+        >
+          Ask the remote's server
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            greetHost({ data: { host: hostName } }).then(
+              ({ message }) => setAnswer(message),
+              () => setAnswer("The remote's server did not answer."),
+            );
+          }}
+        >
+          Greet the remote's server
+        </button>
+      </div>
       {answer ? <p className="remote-answer">{answer}</p> : null}
     </article>
   );

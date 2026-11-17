@@ -1,4 +1,12 @@
+/* The three hosts share this stylesheet; remote cards bring their own. */
+
 :root {
+  --host-accent: #8fffb8;
+  --host-border: #344239;
+  --host-muted: #96a39a;
+  --host-surface: rgba(20, 28, 23, 0.82);
+  --mono: "SFMono-Regular", Consolas, monospace;
+
   color: #e9efe9;
   background: #101411;
   font-family: "Avenir Next", "Trebuchet MS", sans-serif;
@@ -27,10 +35,44 @@ button {
   font: inherit;
 }
 
+a {
+  color: var(--host-accent);
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  width: min(1120px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 24px 0;
+  border-bottom: 1px solid var(--host-border);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.site-nav .host-badge {
+  margin-right: auto;
+  color: var(--host-accent);
+}
+
+.site-nav a {
+  color: var(--host-muted);
+  text-decoration: none;
+}
+
+.site-nav a:hover,
+.site-nav a[data-status="active"] {
+  color: #e9efe9;
+}
+
 .page-shell {
   width: min(1120px, calc(100% - 40px));
   margin: 0 auto;
-  padding: 88px 0 72px;
+  padding: 72px 0;
 }
 
 .hero {
@@ -41,22 +83,22 @@ button {
 .eyebrow,
 .card-label,
 .card-index {
-  font-family: "SFMono-Regular", Consolas, monospace;
+  font-family: var(--mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .eyebrow {
-  color: #8fffb8;
+  color: var(--host-accent);
   font-size: 0.78rem;
 }
 
 h1 {
   margin: 18px 0 20px;
   max-width: 760px;
-  font-size: clamp(3rem, 8vw, 6.8rem);
-  line-height: 0.94;
-  letter-spacing: -0.065em;
+  font-size: clamp(2.8rem, 7vw, 6rem);
+  line-height: 0.96;
+  letter-spacing: -0.06em;
 }
 
 .lede {
@@ -70,19 +112,19 @@ h1 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
-  margin-top: 64px;
+  margin-top: 56px;
 }
 
 .host-card,
 .remote-loading {
   min-height: 300px;
-  border: 1px solid #344239;
+  border: 1px solid var(--host-border);
   padding: 30px;
 }
 
 .host-card {
   position: relative;
-  background: rgba(20, 28, 23, 0.82);
+  background: var(--host-surface);
 }
 
 .card-index {
@@ -94,8 +136,8 @@ h1 {
 }
 
 .card-label {
-  margin: 0 0 70px;
-  color: #8fffb8;
+  margin: 0 0 56px;
+  color: var(--host-accent);
   font-size: 0.72rem;
 }
 
@@ -104,17 +146,83 @@ h1 {
   font-size: 1.8rem;
 }
 
-.host-card p:last-child {
-  max-width: 390px;
-  color: #96a39a;
+.host-card p {
+  max-width: 420px;
+  color: var(--host-muted);
   line-height: 1.65;
 }
 
 .remote-loading {
   display: grid;
   place-items: center;
-  color: #8fffb8;
-  font-family: "SFMono-Regular", Consolas, monospace;
+  color: var(--host-accent);
+  font-family: var(--mono);
+  text-align: center;
+}
+
+/* Answers from a remote's server functions, rendered by the host. */
+.server-answers {
+  display: grid;
+  gap: 8px;
+  margin: 28px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.remote-server-answer {
+  margin: 0;
+  border-left: 2px solid var(--host-accent);
+  padding: 4px 0 4px 14px;
+  color: #c9d4cc;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+
+.visitor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.visitor-actions button {
+  border: 1px solid var(--host-accent);
+  background: transparent;
+  color: var(--host-accent);
+  cursor: pointer;
+  padding: 10px 16px;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+}
+
+.visitor-actions button[aria-pressed="true"] {
+  background: var(--host-accent);
+  color: #101411;
+}
+
+.visitor-actions button:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 10px 24px;
+  margin: 0;
+}
+
+.facts dt {
+  color: #617066;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.facts dd {
+  margin: 0;
+  color: #e9efe9;
 }
 
 @keyframes rise {
@@ -128,9 +236,15 @@ h1 {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .hero {
+    animation: none;
+  }
+}
+
 @media (max-width: 760px) {
   .page-shell {
-    padding-top: 56px;
+    padding-top: 48px;
   }
 
   .proof-grid {

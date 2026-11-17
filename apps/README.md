@@ -28,18 +28,20 @@ pnpm preview  # production builds (`vite preview` / `rsbuild preview`)
 Then open http://127.0.0.1:3000, http://127.0.0.1:3003, or
 http://127.0.0.1:3005. Every remote card has a counter button; clicking it
 proves the remote shares the host's React instance. Cards rendered on the
-server show "Rendered on the server" until they hydrate.
+server show "Rendered on the server" until they hydrate. The SSR hosts also
+have a **Visitor** page, linked from the navigation bar.
 
 ## What each host shows
 
-- **Vite host.** The route loader imports the Vite remote and the Rsbuild SSR
-  remote, so both cards are in the server response and hydrate in place. The
-  loader also reads each remote's stylesheets with `getRemoteStylesheets`, and
-  the route's `head` links them, so the cards are styled before JavaScript
-  runs. The `rsbuild-remote` card mounts after hydration. The cards are
-  `lazyRemote` components, which load again after a failure. Every remote sits
-  behind `RemoteBoundary`, an error boundary with a fallback card, and the
-  loader ignores failed imports, so an offline remote never fails the route.
+- **Vite host.** The cards are `lazyRemote` components, and the route loader
+  awaits `preload()` for the Vite remote and the Rsbuild SSR remote, so both
+  cards stream inline in the server response, even on a server's first request
+  and right after a remote recovers, and hydrate in place. The loader also
+  reads each remote's stylesheets with `getRemoteStylesheets`, and the route's
+  `head` links them, so the cards are styled before JavaScript runs. The
+  `rsbuild-remote` card mounts after hydration. Every remote sits behind
+  `RemoteBoundary`, an error boundary with a fallback card, and the loader
+  ignores failed loads, so an offline remote never fails the route.
 - **Rsbuild host.** `RemoteCardSlot` calls `loadRemote()` in an effect and
   shows "Remote unavailable" when a remote fails. The host uses
   `shareStrategy: "loaded-first"`, so it does not fetch every remote's
@@ -50,6 +52,24 @@ server show "Rendered on the server" until they hydrate.
   to `@module-federation/vite`'s SSR loader, which is why this app depends on
   `@module-federation/vite` and `vite`.
 
+## Remote server functions and credentials
+
+The Rsbuild SSR remote exposes `./serverFunctions`, and both SSR hosts route its
+calls with `createRemoteServerFunctions` in `src/start.ts`. The home pages call
+them while rendering, and the remote's card calls them from the browser
+through the host.
+
+The **Visitor** page (`/visitor`) shows what a remote's server sees. The host
+signs a demo visitor in with an httpOnly cookie on its own origin. Its
+`headers` option sends the remote only the visitor's name, in an
+`x-example-visitor` header, and the remote reports the name and whether any
+cookie reached it: none does. Signing in runs the route loader again in the
+browser, so the call goes through the host; opening the page directly renders
+it on the host's server. A real remote must only trust such a header from its
+host, for example on a private network.
+
+## Failures
+
 Stop a remote while the hosts are open and reload them: each host keeps
 rendering, the client-side boundary shows its fallback, and the remote renders
 again once it is back. An SSR error boundary fallback is not guaranteed in the
@@ -57,6 +77,9 @@ initial server HTML. The same holds for a host started before its remotes.
 
 ## Notes
 
+- The three hosts share one stylesheet (`src/styles.css`, identical in each);
+  every remote card styles itself, so it looks the same in any host and
+  standalone.
 - The federation wrapper must come before `tanstackStart()` in the Vite
   configs, and after it in the Rsbuild configs.
 - Each `start` script runs the bundler's development server. In Vite's CLI the

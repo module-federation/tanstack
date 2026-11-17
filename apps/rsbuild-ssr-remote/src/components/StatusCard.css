@@ -1,27 +1,89 @@
 .rsbuild-ssr-card {
-  border: 1px solid #83502a;
-  background: #291c13;
-  color: #fff3e8;
+  position: relative;
+  min-height: 300px;
+  border: 1px solid #2f6a73;
+  background: #11211f;
+  color: #e6f4f1;
   padding: 30px;
+  box-shadow: 14px 14px 0 #0a0d0b;
+  font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+}
+
+.rsbuild-ssr-card .eyebrow,
+.rsbuild-ssr-card .remote-status,
+.rsbuild-ssr-card .host-name,
+.rsbuild-ssr-card .remote-answer,
+.rsbuild-ssr-card button {
+  font-family: "SFMono-Regular", Consolas, monospace;
 }
 
 .rsbuild-ssr-card .eyebrow {
-  color: #ffbc7c;
-  font-family: monospace;
+  margin: 0 0 40px;
+  color: #7fe0d2;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
+.rsbuild-ssr-card .remote-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #b8cdc9;
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rsbuild-ssr-card .remote-status::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #7fe0d2;
+  box-shadow: 0 0 10px rgba(127, 224, 210, 0.72);
+  content: "";
+}
+
 .rsbuild-ssr-card h2 {
-  font-size: 2rem;
+  margin: 22px 0 12px;
+  font-size: 1.8rem;
+}
+
+.rsbuild-ssr-card p {
+  color: #a9bfbb;
+  line-height: 1.65;
+}
+
+.rsbuild-ssr-card .host-name {
+  font-size: 0.8rem;
+}
+
+.rsbuild-ssr-card .card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
 }
 
 .rsbuild-ssr-card button {
-  background: #ffbc7c;
-  border: 0;
+  border: 1px solid #7fe0d2;
+  background: transparent;
+  color: #7fe0d2;
   cursor: pointer;
-  padding: 12px;
+  padding: 10px 14px;
+  font-size: 0.8rem;
 }
 
-.rsbuild-ssr-card button + button {
-  margin-left: 8px;
+.rsbuild-ssr-card button:first-child {
+  background: #7fe0d2;
+  color: #0d1a18;
+}
+
+.rsbuild-ssr-card .remote-answer {
+  margin: 16px 0 0;
+  border-left: 2px solid #7fe0d2;
+  padding-left: 12px;
+  color: #e6f4f1;
+  font-size: 0.82rem;
 }

@@ -18,11 +18,14 @@ Assessment date: 2026-10-06.
 `test/example-runtime.test.mjs` (development servers) and
 `test/example-production.test.mjs` (production builds) run the same scenarios
 through `test/support/examples.mjs` on every supported Node line in CI: remote
-markup in the initial HTML for eight concurrent first requests, remote
-stylesheets in the response (builds), hydration without console errors, remote
-interactivity, one React instance and shared context, fallback and recovery
-while every remote is offline, and hosts that start during an outage rendering
-the remotes once they return.
+markup inline in the initial HTML for eight concurrent first requests, with no
+hidden streamed segments, remote stylesheets in the response (builds),
+hydration without console errors, remote interactivity, one React instance and
+shared context, remote server functions while rendering and from the browser,
+a host that sends a remote one credential header and none of its cookies,
+client-side navigation into federated routes, fallback and recovery while
+every remote is offline, and hosts that start during an outage rendering the
+remotes once they return.
 
 ## Done for 0.1.0
 
