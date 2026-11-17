@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
+import { PassThrough } from "node:stream";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
@@ -20,7 +21,7 @@ const { getRemoteStylesheets, lazyRemote } = await import(
 const packageRequire = createRequire(join(root, "packages", "tanstack", "package.json"));
 const { createInstance } = packageRequire("@module-federation/runtime");
 const { createElement, Suspense } = packageRequire("react");
-const { renderToString } = packageRequire("react-dom/server");
+const { renderToPipeableStream, renderToString } = packageRequire("react-dom/server");
 const { prerenderToNodeStream } = packageRequire("react-dom/static");
 
 const files = new Map();
@@ -645,5 +646,77 @@ test("lazyRemote renders the remote, and loads again only after retryAfterMs", a
   online = false;
   await new Promise((resolve) => setTimeout(resolve, 120));
   assert.match(renderToString(createElement(RemoteCard, { label: "four" })), /card four/);
+  assert.equal(loads, 2);
+});
+
+/**
+ * Streams `element` inside a document shell, as TanStack Start does: the shell flushes as
+ * soon as it is ready, so content that suspends arrives later in a hidden segment.
+ */
+function streamDocument(element) {
+  return new Promise((resolve, reject) => {
+    let html = "";
+    const output = new PassThrough();
+    output.on("data", (chunk) => (html += chunk));
+    output.on("end", () => resolve(html));
+    const page = createElement(
+      "html",
+      null,
+      createElement(
+        "body",
+        null,
+        createElement("h1", null, "host"),
+        createElement(Suspense, { fallback: "fallback" }, element),
+      ),
+    );
+    const stream = renderToPipeableStream(page, {
+      onShellError: reject,
+      onShellReady: () => stream.pipe(output),
+    });
+  });
+}
+
+const hiddenSegment = /<div hidden id="S:|<!--\$\?-->/;
+
+test("lazyRemote.preload lets a streaming server render the remote inline, also after an outage", async () => {
+  let online = true;
+  let loads = 0;
+  const Card = ({ label }) => createElement("p", null, `card ${label}`);
+  // A federation runtime answers a macrotask later even for a cached module.
+  const remote = () =>
+    new Promise((resolve, reject) =>
+      setTimeout(() => (online ? resolve({ default: Card }) : reject(new Error("off"))), 1),
+    );
+
+  // Without preload, the first render suspends and the card streams in a hidden segment.
+  const unloaded = lazyRemote(remote);
+  const cold = await streamDocument(createElement(unloaded, { label: "cold" }));
+  assert.match(cold, hiddenSegment);
+  assert.match(cold, /card cold/);
+
+  // A route loader awaits preload, so the render that follows has the module in hand.
+  const RemoteCard = lazyRemote(
+    () => {
+      loads++;
+      return remote();
+    },
+    { retryAfterMs: 50 },
+  );
+  online = false;
+  await assert.rejects(RemoteCard.preload(), /off/);
+  // Preload and render share the failure until retryAfterMs passes.
+  await assert.rejects(RemoteCard.preload(), /off/);
+  assert.equal(loads, 1);
+
+  online = true;
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  assert.equal((await RemoteCard.preload()).default, Card);
+  assert.equal(loads, 2);
+  const recovered = await streamDocument(createElement(RemoteCard, { label: "recovered" }));
+  assert.doesNotMatch(recovered, hiddenSegment);
+  assert.match(recovered, /<h1>host<\/h1><!--\$--><p>card recovered<\/p><!--\/\$-->/);
+
+  // A loaded remote resolves preload without loading again.
+  assert.equal((await RemoteCard.preload()).default, Card);
   assert.equal(loads, 2);
 });

@@ -8,38 +8,65 @@ export type LazyRemoteOptions = {
   retryAfterMs?: number;
 };
 
+export type LazyRemoteComponent<T extends ComponentType<any>> = ComponentType<ComponentProps<T>> & {
+  /**
+   * Loads the remote now and resolves with its module. Shares attempts, failures, and
+   * `retryAfterMs` with rendering, so a loader and a render never load the remote twice.
+   */
+  preload(): Promise<{ default: T }>;
+};
+
 /**
  * `React.lazy` for remote modules. A component from `React.lazy` that fails to load stays
  * failed: on a server, every later request renders the same error, even once the remote
- * is back. This one loads again on the first render after `retryAfterMs`.
+ * is back. This one loads again on the first render or `preload()` after `retryAfterMs`.
+ *
+ * Await `preload()` in the route loader of a server-rendered page. A component that has not
+ * loaded yet suspends on its first render, and a streaming server then sends the remote's
+ * markup in a hidden segment that only JavaScript reveals.
  *
  * ```tsx
  * const StatusCard = lazyRemote(() => import("remote/StatusCard"));
+ *
+ * export const Route = createFileRoute("/")({
+ *   // An unavailable remote must not fail the route: an error boundary handles it.
+ *   loader: () => StatusCard.preload().catch(() => null),
+ *   component: () => <StatusCard />,
+ * });
  * ```
  */
 export function lazyRemote<T extends ComponentType<any>>(
   load: () => Promise<{ default: T }>,
   { retryAfterMs = 5_000 }: LazyRemoteOptions = {},
-): ComponentType<ComponentProps<T>> {
+): LazyRemoteComponent<T> {
+  let loaded: { default: T } | undefined;
   let failedAt: number | undefined;
-  const create = () =>
-    lazy(() =>
-      load().catch((error: unknown) => {
-        failedAt = Date.now();
-        throw error;
-      }),
-    );
-  let current = create();
+  let current: { Lazy: ComponentType<any>; promise: Promise<{ default: T }> } | undefined;
 
-  return function RemoteComponent(props: ComponentProps<T>) {
+  const attempt = () => {
     // React renders again right after a load fails, to report the error. Waiting before a
     // new attempt keeps that render from starting another load.
-    if (failedAt !== undefined && Date.now() - failedAt >= retryAfterMs) {
-      failedAt = undefined;
-      current = create();
+    if (current && (failedAt === undefined || Date.now() - failedAt < retryAfterMs)) {
+      return current;
     }
-    return createElement(current as ComponentType<ComponentProps<T>>, props);
+    failedAt = undefined;
+    const promise = load().then(
+      (module) => (loaded = module),
+      (error: unknown) => {
+        failedAt = Date.now();
+        throw error;
+      },
+    );
+    current = { Lazy: lazy(() => promise), promise };
+    return current;
   };
+
+  function RemoteComponent(props: ComponentProps<T>) {
+    // Once loaded, render the module itself: a new React.lazy would suspend once more.
+    return createElement(loaded ? loaded.default : attempt().Lazy, props);
+  }
+  RemoteComponent.preload = () => (loaded ? Promise.resolve(loaded) : attempt().promise);
+  return RemoteComponent;
 }
 
 export type RemoteStylesheetOptions = RemoteFetchOptions & {
