@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 (2026-11-18)
+
+## What's Changed
+* fix(vite): keep server functions out of SSR entry by @gioboa in https://github.com/module-federation/tanstack/pull/23
+* feat(runtime): add lazyRemote preload so loaders stream remotes inline by @Nsttt in https://github.com/module-federation/tanstack/pull/25
+
+
+**Full Changelog**: https://github.com/module-federation/tanstack/compare/0.2.0...0.3.0
+
 ## 0.2.0 (2026-11-13)
 
 ## What's Changed
