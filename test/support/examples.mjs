@@ -416,22 +416,26 @@ export function describeExamples(script) {
     });
   });
 
-  /** Waits until every SSR host renders all of its remotes on the server. */
+  /** Waits until every SSR host renders all of its remotes inline on the server. */
   async function assertServerRendersRemotes(when) {
     for (const [host, remoteKeys] of Object.entries(serverRendered)) {
+      // Waits for inline markup, not just the cards. A loader whose preload still sees the
+      // last failure, followed by a render after `retryAfterMs`, starts a fresh load while
+      // rendering. That one response streams the cards in hidden segments; the next renders
+      // them inline.
       const { body } = await waitForResponse(
         apps[host].url,
         processes[host],
         ({ body }) =>
           remoteKeys.every((remote) => body.includes(remoteCards[remote])) &&
-          (!routerCardServerRendered.has(host) || body.includes("Remote uses the host router")),
+          (!routerCardServerRendered.has(host) || body.includes("Remote uses the host router")) &&
+          !hiddenSegment.test(body),
       );
       assert.equal(
         body.match(/Rendered on the server/g)?.length,
         remoteKeys.length,
         `${host} renders its remotes on the server ${when}`,
       );
-      assert.doesNotMatch(body, hiddenSegment, `${host} renders its remotes inline ${when}`);
       if (routerCardServerRendered.has(host)) {
         assert.ok(body.includes("Remote uses the host router"), `${host} renders ${routerCard}`);
       }
