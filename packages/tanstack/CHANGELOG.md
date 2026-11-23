@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0 (2026-11-23)
+
+## What's Changed
+* test: wait for inline SSR after remotes recover from an outage by @Nsttt in https://github.com/module-federation/tanstack/pull/26
+* ci: restore Node 22.18 coverage and split test lanes by @dmchoi77 in https://github.com/module-federation/tanstack/pull/27
+* feat(runtime): structure remote fetch errors by @dmchoi77 in https://github.com/module-federation/tanstack/pull/28
+
+
+**Full Changelog**: https://github.com/module-federation/tanstack/compare/0.3.0...0.4.0
+
 ## 0.3.0 (2026-11-18)
 
 ## What's Changed
