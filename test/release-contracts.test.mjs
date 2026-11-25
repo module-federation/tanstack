@@ -739,10 +739,10 @@ test("release-please tags the version the publish workflow validates", () => {
 });
 
 test("release-please output passes the format gate in release PRs and publishes", () => {
-  // release-please writes `*` bullets and blank-line runs that Prettier rewrites.
-  const prettierIgnore = readFileSync(join(root, ".prettierignore"), "utf8").split("\n");
-  assert.ok(prettierIgnore.includes("packages/tanstack/CHANGELOG.md"));
-  assert.ok(prettierIgnore.includes(".release-please-manifest.json"));
+  // release-please writes `*` bullets and blank-line runs that oxfmt rewrites.
+  const { ignorePatterns } = JSON.parse(readFileSync(join(root, ".oxfmtrc.json"), "utf8"));
+  assert.ok(ignorePatterns.includes("packages/tanstack/CHANGELOG.md"));
+  assert.ok(ignorePatterns.includes(".release-please-manifest.json"));
 });
 
 test("release-please releases trigger the trusted publish workflow", () => {

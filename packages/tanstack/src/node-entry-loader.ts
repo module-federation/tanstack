@@ -300,7 +300,8 @@ function registerNodeSharedModules(origin: FederationHost) {
     if (!version) continue;
 
     const configured = origin.options.shared[packageName]?.[0] as
-      { scope?: string | string[]; shareConfig?: Record<string, unknown> } | undefined;
+      | { scope?: string | string[]; shareConfig?: Record<string, unknown> }
+      | undefined;
     shared[packageName] = {
       version,
       lib: () => resolved.require(resolved.path),

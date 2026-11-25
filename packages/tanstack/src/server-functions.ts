@@ -252,6 +252,7 @@ function registry(): Map<string, RemoteServerFunctionsTarget> {
 
 function currentStartRequest(): Request | undefined {
   const storage = (globalThis as Record<symbol, unknown>)[START_STORAGE_KEY] as
-    { getStore(): { request?: Request } | undefined } | undefined;
+    | { getStore(): { request?: Request } | undefined }
+    | undefined;
   return storage?.getStore()?.request;
 }

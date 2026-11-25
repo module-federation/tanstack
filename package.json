@@ -13,8 +13,10 @@
     "test:core": "node --test --test-concurrency=1 test/*.test.mjs",
     "test:e2e": "node --test --test-concurrency=1 test/e2e/*.test.mjs",
     "typecheck": "turbo run typecheck",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "lint": "oxlint --deny-warnings",
+    "lint:fix": "oxlint --fix --deny-warnings",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
     "prepare": "husky",
     "pack:tanstack": "pnpm --filter @module-federation/tanstack pack:dry",
     "start": "pnpm build:package && turbo run start",
@@ -22,8 +24,9 @@
   },
   "devDependencies": {
     "husky": "9.1.7",
+    "oxfmt": "0.80.0",
+    "oxlint": "1.95.0",
     "playwright": "1.63.0",
-    "prettier": "3.9.9",
     "turbo": "2.11.7",
     "typescript": "7.0.2"
   }
