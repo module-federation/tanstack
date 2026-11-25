@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0 (2026-11-25)
+
+## What's Changed
+* chore: add Husky pre-commit checks by @dmchoi77 in https://github.com/module-federation/tanstack/pull/31
+* feat: add remote error observability by @dmchoi77 in https://github.com/module-federation/tanstack/pull/30
+* chore: adopt oxlint and oxfmt by @Nsttt in https://github.com/module-federation/tanstack/pull/33
+
+
+**Full Changelog**: https://github.com/module-federation/tanstack/compare/0.4.0...0.5.0
+
 ## 0.4.0 (2026-11-23)
 
 ## What's Changed

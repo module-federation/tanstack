@@ -1,6 +1,6 @@
 {
   "name": "@module-federation/tanstack",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "description": "TanStack Start integration for Module Federation",
   "license": "MIT",
