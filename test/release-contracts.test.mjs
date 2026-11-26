@@ -214,6 +214,24 @@ test("Vite dev servers inline each app's server function base in its client code
   assert.equal(inlined, 'const url = "/_serverFn/" + functionId;');
 });
 
+test("Vite adapters inject the configured stylesheet resolver", () => {
+  const plugin = tanstackStartModuleFederation({
+    name: "host",
+    remotes: {
+      remote: {
+        type: "module",
+        name: "remote",
+        entry: "https://remote.example/mf-manifest.json",
+      },
+    },
+  }).find(({ name }) => name === "tanstack-start-federation:remote-stylesheet-resolver");
+  assert.ok(plugin);
+  assert.equal(plugin.enforce, "pre");
+  const resolved = plugin.resolveId("@module-federation/tanstack/remote-stylesheet-resolver");
+  assert.equal(resolved, "\0@module-federation/tanstack/remote-stylesheet-resolver");
+  assert.match(plugin.load(resolved), /https:\/\/remote\.example\/mf-manifest\.json/);
+});
+
 test("Rsbuild shared defaults never mutate caller overrides", () => {
   const callerShared = { react: { eager: false, singleton: false } };
   const before = structuredClone(callerShared);
@@ -307,13 +325,117 @@ test("Rsbuild federation is browser-only by default", () => {
     tanstackStartRsbuildModuleFederation({ federation }).map(({ name }) => name);
   assert.deepEqual(pluginNames(rsbuildRemote), [
     "rsbuild:module-federation-enhanced",
+    "tanstack-start-federation-remote-stylesheet-resolver",
     "tanstack-start-federation-client-compat",
   ]);
   assert.deepEqual(pluginNames(rsbuildHost), [
     "rsbuild:module-federation-enhanced",
+    "tanstack-start-federation-remote-stylesheet-resolver",
     "tanstack-start-federation-remote-retry",
     "tanstack-start-federation-client-compat",
   ]);
+});
+
+test("Rsbuild adapters inject the configured stylesheet resolver", () => {
+  const plugin = tanstackStartRsbuildModuleFederation({
+    federation: {
+      name: "host",
+      remotes: { base: "base@http://base/mf-manifest.json" },
+    },
+    client: { remotes: { client: "client@http://client/mf-manifest.json" } },
+    server: { remotes: { server: "server@http://server/mf-manifest.json" } },
+  }).find(({ name }) => name === "tanstack-start-federation-remote-stylesheet-resolver");
+  assert.ok(plugin);
+
+  let modifyBundlerChain;
+  plugin.setup({
+    modifyBundlerChain: (handler) => {
+      modifyBundlerChain = handler;
+    },
+  });
+  assert.equal(typeof modifyBundlerChain, "function");
+
+  const chain = {
+    plugin(name) {
+      assert.equal(name, "tanstack-start-remote-stylesheet-resolver");
+      return {
+        use(value) {
+          chain.replacement = value;
+        },
+      };
+    },
+  };
+  class NormalModuleReplacementPlugin {
+    constructor(resourceRegExp, newResource) {
+      this.resourceRegExp = resourceRegExp;
+      this.newResource = newResource;
+    }
+  }
+
+  const injectedModule = (isServer) => {
+    chain.replacement = undefined;
+    modifyBundlerChain(chain, { isServer, rspack: { NormalModuleReplacementPlugin } });
+    const replacement = chain.replacement;
+    assert.ok(replacement);
+    assert.ok(
+      replacement.resourceRegExp.test("@module-federation/tanstack/remote-stylesheet-resolver"),
+    );
+    const resource = {
+      request: "@module-federation/tanstack/remote-stylesheet-resolver",
+    };
+    replacement.newResource(resource);
+    assert.match(resource.request, /^data:text\/javascript,/);
+    return decodeURIComponent(resource.request.slice("data:text/javascript,".length));
+  };
+
+  assert.match(injectedModule(false), /http:\/\/client\/mf-manifest\.json/);
+  assert.doesNotMatch(injectedModule(false), /http:\/\/server\/mf-manifest\.json/);
+  assert.match(injectedModule(true), /http:\/\/server\/mf-manifest\.json/);
+  assert.doesNotMatch(injectedModule(true), /http:\/\/client\/mf-manifest\.json/);
+});
+
+test("Rsbuild host detection honors client and server remote overrides", () => {
+  const plugins = tanstackStartRsbuildModuleFederation({
+    federation: { name: "host", exposes: {} },
+    client: { remotes: { client: "client@http://client/mf-manifest.json" } },
+    server: { remotes: { server: "server@http://server/mf-manifest.json" } },
+  });
+
+  assert.ok(plugins.some(({ name }) => name === "tanstack-start-federation-remote-retry"));
+  assert.equal(
+    plugins.filter(({ name }) => name === "rsbuild:module-federation-enhanced").length,
+    2,
+  );
+});
+
+test("Rsbuild stylesheet resolver normalizes external and array remotes", () => {
+  const plugin = tanstackStartRsbuildModuleFederation({
+    federation: {
+      name: "host",
+      remotes: [
+        { external: { external: ["array_remote@http://array/mf-manifest.json"] } },
+        { external_remote: { external: "http://external/mf-manifest.json" } },
+      ],
+    },
+  }).find(({ name }) => name === "tanstack-start-federation-remote-stylesheet-resolver");
+  let modifyBundlerChain;
+  plugin.setup({ modifyBundlerChain: (handler) => (modifyBundlerChain = handler) });
+
+  let replacement;
+  const chain = { plugin: () => ({ use: (value) => (replacement = value) }) };
+  class NormalModuleReplacementPlugin {
+    constructor(_resourceRegExp, newResource) {
+      this.newResource = newResource;
+    }
+  }
+  modifyBundlerChain(chain, { isServer: false, rspack: { NormalModuleReplacementPlugin } });
+  const resource = {
+    request: "@module-federation/tanstack/remote-stylesheet-resolver",
+  };
+  replacement.newResource(resource);
+  const code = decodeURIComponent(resource.request.slice("data:text/javascript,".length));
+  assert.match(code, /http:\/\/array\/mf-manifest\.json/);
+  assert.match(code, /http:\/\/external\/mf-manifest\.json/);
 });
 
 test("Rsbuild remotes resolve browser chunks from their own origin", () => {
@@ -370,6 +492,7 @@ test("Rsbuild SSR remotes ship a Node container with the browser assets", async 
     plugins.map(({ name }) => name),
     [
       "rsbuild:module-federation-enhanced",
+      "tanstack-start-federation-remote-stylesheet-resolver",
       "tanstack-start-federation-client-compat",
       "tanstack-start-federation-server-container",
       "tanstack-start-federation-server-container-functions",
@@ -427,6 +550,7 @@ test("Rsbuild SSR hosts load remotes from an async-node CommonJS server", () => 
     plugins.map(({ name }) => name),
     [
       "rsbuild:module-federation-enhanced",
+      "tanstack-start-federation-remote-stylesheet-resolver",
       "tanstack-start-federation-remote-retry",
       "tanstack-start-federation-client-compat",
       "rsbuild:module-federation-enhanced",
@@ -615,7 +739,7 @@ test("clean consumers resolve CJS and ESM entrypoints without the other adapter"
   );
 });
 
-test("runtime subpaths load without a bundler adapter", () => {
+test("runtime subpaths load without a bundler adapter", async () => {
   // Route code imports the runtime helpers, so React is always installed next to them.
   const consumer = createConsumer(["react"]);
   try {
@@ -623,6 +747,9 @@ test("runtime subpaths load without a bundler adapter", () => {
     const runtime = consumerRequire("@module-federation/tanstack/runtime");
     const loader = consumerRequire("@module-federation/tanstack/node-entry-loader");
     const serverFunctions = consumerRequire("@module-federation/tanstack/server-functions");
+    const stylesheetResolver = consumerRequire(
+      "@module-federation/tanstack/remote-stylesheet-resolver",
+    );
     assert.equal(typeof runtime.getRemoteStylesheets, "function");
     assert.equal(typeof runtime.lazyRemote, "function");
     assert.equal(typeof runtime.RemoteFetchError, "function");
@@ -632,6 +759,20 @@ test("runtime subpaths load without a bundler adapter", () => {
     assert.equal(typeof loader.default, "function");
     assert.equal(typeof loader.RemoteEntryError, "function");
     assert.equal(typeof serverFunctions.RemoteServerFunctionError, "function");
+    assert.equal(typeof stylesheetResolver.resolveRemoteStylesheet, "function");
+    await assert.rejects(
+      stylesheetResolver.resolveRemoteStylesheet("remote/Card"),
+      /No Module Federation adapter resolver is available/,
+    );
+    await assert.rejects(
+      runtime.getRemoteStylesheets("remote/Card"),
+      /No Module Federation adapter resolver is available/,
+    );
+    assertConsumerImport(
+      consumer,
+      "@module-federation/tanstack/remote-stylesheet-resolver",
+      "resolveRemoteStylesheet",
+    );
   } finally {
     rmSync(consumer, { force: true, recursive: true });
   }
@@ -646,12 +787,12 @@ test("runtime subpaths load without a bundler adapter", () => {
   }
 });
 
-function assertConsumerImport(consumer, specifier) {
+function assertConsumerImport(consumer, specifier, exportName = "tanstackStartModuleFederation") {
   const entry = join(consumer, "consumer.mjs");
   writeFileSync(
     entry,
-    `import { tanstackStartModuleFederation } from ${JSON.stringify(specifier)};\n` +
-      `if (typeof tanstackStartModuleFederation !== "function") process.exit(2);\n`,
+    `import { ${exportName} } from ${JSON.stringify(specifier)};\n` +
+      `if (typeof ${exportName} !== "function") process.exit(2);\n`,
   );
   const result = spawnSync(process.execPath, [entry], {
     cwd: consumer,

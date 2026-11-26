@@ -13,6 +13,10 @@ import {
   SERVER_FN_BASE_DEFINE,
 } from "./server-container";
 import { defaultShared, eagerShared, resolveShared, tanstackStartSharedPackages } from "./shared";
+import {
+  createRemoteStylesheetResolverModule,
+  REMOTE_STYLESHEET_RESOLVER_MODULE,
+} from "./remote-stylesheet-adapter";
 
 type ModuleFederationOverride = Partial<ModuleFederationOptions>;
 
@@ -72,7 +76,19 @@ export function tanstackStartModuleFederation({
   const federationName = federation.name;
   if (!federationName) throw new Error("federation.name is required");
 
-  const isHost = hasEntries(federation.remotes);
+  const serverOptions = server && server !== true ? server : undefined;
+  const {
+    chunkFilename,
+    entryFilename,
+    environment: serverEnvironment = "ssr",
+    forceCommonJsOutput = true,
+    ssrEntryLoader,
+    ...serverOverrides
+  } = serverOptions ?? {};
+  const clientRemotes = clientOverrides.remotes ?? federation.remotes;
+  const serverRemotes = serverOverrides.remotes ?? federation.remotes;
+
+  const isHost = hasEntries(clientRemotes) || hasEntries(serverRemotes);
   const isRemote = hasEntries(federation.exposes);
   const serverEnabled = server !== false;
   const exposesServerContainer = serverEnabled && isRemote;
@@ -88,6 +104,7 @@ export function tanstackStartModuleFederation({
       environment: clientEnvironment,
       target: "web",
     }),
+    remoteStylesheetResolverPlugin(clientRemotes, serverRemotes),
     ...(isHost ? [remoteRetryPlugin()] : []),
     clientCompatibilityPlugin({
       chunkLoadingGlobal: chunkLoadingGlobal ?? `chunk_${federationName}`,
@@ -99,15 +116,6 @@ export function tanstackStartModuleFederation({
   ];
 
   if (!serverEnabled) return plugins;
-
-  const {
-    chunkFilename,
-    entryFilename,
-    environment: serverEnvironment = "ssr",
-    forceCommonJsOutput = true,
-    ssrEntryLoader,
-    ...serverOverrides
-  } = server === true ? {} : server;
 
   if (exposesServerContainer) {
     const { remotes: _remotes, ...containerOptions } = { ...federation, ...serverOverrides };
@@ -162,6 +170,35 @@ export function tanstackStartModuleFederation({
   }
 
   return plugins;
+}
+
+function remoteStylesheetResolverPlugin(
+  clientRemotes: ModuleFederationOptions["remotes"],
+  serverRemotes: ModuleFederationOptions["remotes"],
+): RsbuildPlugin {
+  const clientModuleCode = createRemoteStylesheetResolverModule(clientRemotes);
+  const serverModuleCode = createRemoteStylesheetResolverModule(serverRemotes);
+
+  return {
+    name: "tanstack-start-federation-remote-stylesheet-resolver",
+    setup(api) {
+      api.modifyBundlerChain((chain, { isServer, rspack }) => {
+        const moduleCode = isServer ? serverModuleCode : clientModuleCode;
+        chain.plugin("tanstack-start-remote-stylesheet-resolver").use(
+          new rspack.NormalModuleReplacementPlugin(
+            new RegExp(`^${escapeRegExp(REMOTE_STYLESHEET_RESOLVER_MODULE)}$`),
+            (resource) => {
+              resource.request = `data:text/javascript,${encodeURIComponent(moduleCode)}`;
+            },
+          ),
+        );
+      });
+    },
+  };
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export const pluginTanStackStartModuleFederation = tanstackStartModuleFederation;

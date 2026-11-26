@@ -59,6 +59,16 @@
         "default": "./dist/runtime.cjs"
       }
     },
+    "./remote-stylesheet-resolver": {
+      "import": {
+        "types": "./dist/remote-stylesheet-resolver.d.ts",
+        "default": "./dist/remote-stylesheet-resolver.js"
+      },
+      "require": {
+        "types": "./dist/remote-stylesheet-resolver.d.cts",
+        "default": "./dist/remote-stylesheet-resolver.cjs"
+      }
+    },
     "./server-container-rpc": {
       "import": {
         "types": "./dist/server-container-rpc.d.ts",

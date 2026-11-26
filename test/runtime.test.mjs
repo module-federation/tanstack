@@ -14,9 +14,13 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = join(root, "packages", "tanstack", "dist");
 const loaderUrl = pathToFileURL(join(dist, "node-entry-loader.js")).href;
 const { default: nodeEntryLoader, RemoteEntryError } = await import(loaderUrl);
-const { getRemoteStylesheets, lazyRemote } = await import(
-  pathToFileURL(join(dist, "runtime.js")).href
-);
+const {
+  createRemoteStylesheetResolver,
+  dedupeRemoteStylesheets,
+  getRemoteStylesheets,
+  lazyRemote,
+  RemoteStylesheetResolutionError,
+} = await import(pathToFileURL(join(dist, "runtime.js")).href);
 // The React copy the runtime resolves.
 const packageRequire = createRequire(join(root, "packages", "tanstack", "package.json"));
 const { createInstance } = packageRequire("@module-federation/runtime");
@@ -619,6 +623,132 @@ test("getRemoteStylesheets resolves an expose's CSS from its manifest", async ()
     "https://cdn.test/remote/assets/card.css",
     "https://cdn.test/remote/assets/lazy.css",
   ]);
+});
+
+test("resolves stylesheet manifests from Vite and Rsbuild remote identities", async () => {
+  const viteManifest = JSON.stringify({
+    exposes: [
+      {
+        assets: { css: { sync: ["assets/card.css"] } },
+        name: "StatusCard",
+        path: "./StatusCard",
+      },
+    ],
+    metaData: { publicPath: "auto" },
+  });
+  const rsbuildManifest = viteManifest.replaceAll("StatusCard", "Card");
+  serve("/resolver/vite/mf-manifest.json", viteManifest, "application/json");
+  serve("/resolver/rsbuild/mf-manifest.json", rsbuildManifest, "application/json");
+
+  const viteResolver = createRemoteStylesheetResolver({
+    vite_remote: {
+      entry: `${origin}/resolver/vite/remoteEntry.js`,
+      name: "vite_remote",
+    },
+  });
+  assert.deepEqual(
+    await getRemoteStylesheets("vite_remote/StatusCard", {
+      resolveRemote: viteResolver,
+    }),
+    [`${origin}/resolver/vite/assets/card.css`],
+  );
+
+  const rsbuildResolver = createRemoteStylesheetResolver({
+    rsbuild_remote: `rsbuild_remote@${origin}/resolver/rsbuild/mf-manifest.json`,
+  });
+  assert.deepEqual(
+    await getRemoteStylesheets("rsbuild_remote/./Card", {
+      resolveRemote: rsbuildResolver,
+    }),
+    [`${origin}/resolver/rsbuild/assets/card.css`],
+  );
+
+  const externalResolver = createRemoteStylesheetResolver({
+    external_remote: { external: `${origin}/resolver/rsbuild/mf-manifest.json` },
+  });
+  assert.deepEqual(
+    await getRemoteStylesheets("external_remote/Card", { resolveRemote: externalResolver }),
+    [`${origin}/resolver/rsbuild/assets/card.css`],
+  );
+
+  const arrayResolver = createRemoteStylesheetResolver([
+    { array_remote: `array_remote@${origin}/resolver/rsbuild/mf-manifest.json` },
+  ]);
+  assert.deepEqual(
+    await getRemoteStylesheets("array_remote/Card", { resolveRemote: arrayResolver }),
+    [`${origin}/resolver/rsbuild/assets/card.css`],
+  );
+
+  const aliasResolver = createRemoteStylesheetResolver({
+    keyed_remote: {
+      alias: "catalog",
+      entry: `${origin}/resolver/vite/mf-manifest.json`,
+      name: "vite_remote",
+    },
+  });
+  assert.deepEqual(
+    await getRemoteStylesheets("catalog/StatusCard", { resolveRemote: aliasResolver }),
+    [`${origin}/resolver/vite/assets/card.css`],
+  );
+
+  const customManifestResolver = createRemoteStylesheetResolver(
+    {
+      custom_remote: {
+        entry: `${origin}/resolver/custom/remoteEntry.js`,
+        name: "custom_remote",
+      },
+    },
+    { resolveManifestUrl: () => `${origin}/resolver/vite/mf-manifest.json` },
+  );
+  assert.deepEqual(
+    await getRemoteStylesheets("custom_remote/StatusCard", {
+      resolveRemote: customManifestResolver,
+    }),
+    [`${origin}/resolver/vite/assets/card.css`],
+  );
+
+  const signedEntryResolver = createRemoteStylesheetResolver({
+    signed_remote: {
+      entry: `${origin}/resolver/signed/remoteEntry.js?token=abc#fragment`,
+      name: "signed_remote",
+    },
+  });
+  assert.equal(
+    (await signedEntryResolver("signed_remote/Card")).manifestUrl,
+    `${origin}/resolver/signed/mf-manifest.json?token=abc#fragment`,
+  );
+});
+
+test("reports identity resolution failures without hiding them", async () => {
+  const errors = [];
+  const resolver = createRemoteStylesheetResolver({
+    remote: `${origin}/resolver/mf-manifest.json`,
+  });
+
+  await assert.rejects(
+    getRemoteStylesheets("missing/Card", {
+      onError: (error) => errors.push(error),
+      resolveRemote: resolver,
+    }),
+    (error) => {
+      assert.ok(error instanceof RemoteStylesheetResolutionError);
+      assert.equal(error.specifier, "missing/Card");
+      return true;
+    },
+  );
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].specifier, "missing/Card");
+});
+
+test("deduplicates stylesheet URLs while preserving first declaration order", () => {
+  assert.deepEqual(
+    dedupeRemoteStylesheets(
+      [`${origin}/shared.css`, `${origin}/card.css`],
+      [`${origin}/shared.css`, `${origin}/footer.css`],
+      [],
+    ),
+    [`${origin}/shared.css`, `${origin}/card.css`, `${origin}/footer.css`],
+  );
 });
 
 test("getRemoteStylesheets reuses manifests briefly and retries failures", async () => {

@@ -5,6 +5,8 @@ const entry = {
   "node-entry-loader": "./src/node-entry-loader.ts",
   "remote-errors": "./src/remote-errors.ts",
   "remote-fetch": "./src/remote-fetch.ts",
+  "remote-stylesheet-adapter": "./src/remote-stylesheet-adapter.ts",
+  "remote-stylesheet-resolver": "./src/remote-stylesheet-resolver.ts",
   rsbuild: "./src/rsbuild.ts",
   runtime: "./src/runtime.ts",
   "server-container": "./src/server-container.ts",

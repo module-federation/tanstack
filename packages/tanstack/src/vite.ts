@@ -9,6 +9,11 @@ import {
   SERVER_FN_BASE_DEFINE,
 } from "./server-container";
 import { defaultShared, eagerShared, resolveShared } from "./shared";
+import {
+  createRemoteStylesheetResolverModule,
+  REMOTE_STYLESHEET_RESOLVER_MODULE,
+  RESOLVED_REMOTE_STYLESHEET_RESOLVER_MODULE,
+} from "./remote-stylesheet-adapter";
 import { viteVersionPlugin } from "./vite-compat";
 
 export type TanStackStartModuleFederationOptions = Omit<ModuleFederationOptions, "target">;
@@ -47,9 +52,27 @@ export function tanstackStartModuleFederation(
       // Internal `@module-federation/vite` option, not part of its public types.
       ...(isRemote ? { ssrEnvironment: SERVER_ENTRY_ENVIRONMENT } : {}),
     } as ModuleFederationOptions),
+    remoteStylesheetResolverPlugin(configured.remotes),
     devServerFunctionBasePlugin(),
     ...(isRemote ? serverEntryFunctionsPlugins(configured.name) : []),
   ];
+}
+
+function remoteStylesheetResolverPlugin(remotes: ModuleFederationOptions["remotes"]): Plugin {
+  const moduleCode = createRemoteStylesheetResolverModule(remotes);
+
+  return {
+    name: "tanstack-start-federation:remote-stylesheet-resolver",
+    enforce: "pre",
+    resolveId(id) {
+      return id === REMOTE_STYLESHEET_RESOLVER_MODULE
+        ? RESOLVED_REMOTE_STYLESHEET_RESOLVER_MODULE
+        : undefined;
+    },
+    load(id) {
+      return id === RESOLVED_REMOTE_STYLESHEET_RESOLVER_MODULE ? moduleCode : undefined;
+    },
+  };
 }
 
 /**

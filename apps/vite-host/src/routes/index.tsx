@@ -1,4 +1,8 @@
-import { getRemoteStylesheets, lazyRemote } from "@module-federation/tanstack/runtime";
+import {
+  dedupeRemoteStylesheets,
+  getRemoteStylesheets,
+  lazyRemote,
+} from "@module-federation/tanstack/runtime";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { RemoteBoundary } from "../components/RemoteBoundary";
@@ -10,12 +14,6 @@ const RemoteStatusCard = lazyRemote(() => import("tanstack_vite_remote/StatusCar
 const RemoteRouterCard = lazyRemote(() => import("tanstack_vite_remote/RouterCard"));
 const RsbuildStatusCard = lazyRemote(() => import("tanstack_rsbuild_remote/StatusCard"));
 const RsbuildSsrStatusCard = lazyRemote(() => import("tanstack_rsbuild_ssr_remote/StatusCard"));
-
-// Manifests of the remotes this route renders on the server.
-const serverRenderedManifests = [
-  "http://127.0.0.1:3001/mf-manifest.json",
-  "http://127.0.0.1:3004/mf-manifest.json",
-];
 
 // Calls the Rsbuild SSR remote's server functions on the server: the remote's container
 // sends them to the remote's server, so the answers are in the initial HTML. The POST call
@@ -35,10 +33,14 @@ export const Route = createFileRoute("/")({
   loader: async () => {
     const [stylesheets, remoteAnswer] = await Promise.all([
       Promise.all(
-        serverRenderedManifests.map((manifest) =>
-          getRemoteStylesheets(manifest, "./StatusCard").catch(() => []),
+        ["tanstack_vite_remote/StatusCard", "tanstack_rsbuild_ssr_remote/StatusCard"].map(
+          (specifier) =>
+            getRemoteStylesheets(specifier, {
+              onError: (error) =>
+                console.error(`Failed to resolve stylesheets for ${specifier}`, error),
+            }).catch(() => []),
         ),
-      ).then((lists) => lists.flat()),
+      ).then((lists) => dedupeRemoteStylesheets(...lists)),
       askRemoteServer(),
       RemoteStatusCard.preload().catch(() => null),
       RemoteRouterCard.preload().catch(() => null),

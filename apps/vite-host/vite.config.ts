@@ -17,7 +17,7 @@ export default defineConfig({
         tanstack_vite_remote: {
           type: "module",
           name: "tanstack_vite_remote",
-          entry: "http://127.0.0.1:3001/remoteEntry.js",
+          entry: "http://127.0.0.1:3001/mf-manifest.json",
         },
         tanstack_rsbuild_remote: {
           type: "global",

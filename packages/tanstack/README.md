@@ -260,7 +260,9 @@ export const Route = createFileRoute("/")({
   // response. Catch route-loader failures so an unavailable remote does not fail the route.
   loader: async () => {
     const [stylesheets] = await Promise.all([
-      getRemoteStylesheets("https://remote.test/mf-manifest.json", "./StatusCard").catch(() => []),
+      getRemoteStylesheets("remote/StatusCard", {
+        onError: (error) => console.error("Remote stylesheet lookup failed", error),
+      }).catch(() => []),
       StatusCard.preload().catch(() => null),
     ]);
     return { stylesheets };
@@ -299,12 +301,16 @@ rendering or hydration recovery instead.
   its fallback. The import itself loads again after a failure too: `@module-federation/vite`
   1.23.3+ retries failed server loads, and the Rsbuild adapter removes a failed
   remote module from Rspack's module cache.
-- **`getRemoteStylesheets(manifestUrl, expose, { maxAgeMs })`** lists the
-  stylesheets the remote's manifest declares for an expose, as absolute URLs. A
-  remote's CSS otherwise loads with its JavaScript, after the HTML, so the
-  server-rendered markup would be unstyled until then. It works in the browser
-  and on the server, reuses a fetched manifest for 30 seconds (`maxAgeMs`), and
-  rejects when the manifest is unreachable or does not list the expose.
+- **`getRemoteStylesheets("remote/Expose", options)`** resolves a configured Vite or
+  Rsbuild remote through the adapter and lists the stylesheets its manifest declares,
+  as absolute URLs. A remote's CSS otherwise loads with its JavaScript, after the HTML,
+  so the server-rendered markup would be unstyled until then. It works in the browser
+  and on the server, reuses a fetched manifest for 30 seconds (`maxAgeMs`), reports
+  failures through `onError`, and still rejects when the manifest is unreachable or does
+  not list the expose. The explicit `getRemoteStylesheets(manifestUrl, expose, options)`
+  form remains available when the manifest boundary is known by the caller.
+- **`dedupeRemoteStylesheets(...groups)`** removes duplicate stylesheet URLs while
+  preserving their first declaration order.
 
 Remote manifest fetches throw `RemoteFetchError` from the `runtime` entry. Its
 `code` distinguishes network, timeout, HTTP, response-size, and JSON parse
